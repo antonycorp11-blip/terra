@@ -1,3 +1,4 @@
+import type { CampaignData } from './mvpTypes'
 export type Id = string
 export type Point = [number, number]
 export type Season = 'Primavera' | 'Verão' | 'Outono' | 'Inverno'
@@ -10,4 +11,4 @@ export interface Settlement { id: Id; name: string; provinceId: Id; type: Settle
 export interface House { id: Id; name: string; rank: 'real' | 'grão-senhorial' | 'provincial'; realmId: Id; seatProvinceId: Id; motto: string; symbol: string; color: string; gold: number; stock: { food:number; wood:number; iron:number; horses:number }; mobilizable: number; prestige: number; influence: number; titleIds: Id[]; memberIds: Id[]; memory: string[] }
 export interface HistoricalRecord { id: Id; day: number; category: 'fundação' | 'calendário' | 'território'; description: string; entityIds: Id[] }
 export interface World { geographyRevision: 3; seed: number; landPolygon: Point[]; landPolygons: Point[][]; maritimeLinks: [Id,Id][]; seaRoutes: Point[][]; realms: Realm[]; fiefs: Fief[]; provinces: Province[]; settlements: Settlement[]; houses: House[]; rivers: Point[][]; roads: [Id,Id][]; history: HistoricalRecord[] }
-export interface GameState { version: 1; world: World; day: number; playerHouseId: Id; speed: 0 | 1 | 2 | 3; updatedAt: number }
+export interface GameState { version: 2; campaign: CampaignData; world: World; day: number; playerHouseId: Id; speed: 0 | 1 | 2 | 3; updatedAt: number }

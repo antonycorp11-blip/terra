@@ -2,6 +2,8 @@
 ## BÍBLIA OFICIAL DE DESENVOLVIMENTO — VERSÃO 2.0
 ### Simulador de dinastias, política e conquista medieval
 
+> **VISÃO FINAL DO JOGO.** Este documento descreve o jogo completo pretendido. O que já está jogável — o **ESCOPO DO MVP ATUAL**, organizado em Descobrir, Influenciar e Conquistar sobre um único mapa — está em `docs/MVP_SCOPE.md`. Os sistemas desta bíblia que não aparecem lá continuam planejados, não descartados.
+
 # 0. INSTRUÇÕES FUNDAMENTAIS PARA O CODEX
 
 Você é o programador principal, arquiteto de software, game designer e diretor técnico de um jogo medieval de grande estratégia para navegador.

@@ -1,7 +1,6 @@
 import polygonClipping from 'polygon-clipping'
 import { inPolygon } from '../engine/geography'
-import type { Point, Province, Realm, Settlement, World } from '../engine/types'
-export interface MapMarker {settlement:Settlement;kind:'castle'|'port';size:number}
+import type { Point, Province, Realm, World } from '../engine/types'
 export interface RealmLabel {realm:Realm;center:Point;compact:boolean}
 type Box={x:number;y:number;w:number;h:number}
 const overlap=(a:Box,b:Box,pad=0)=>Math.abs(a.x-b.x)<(a.w+b.w)/2+pad&&Math.abs(a.y-b.y)<(a.h+b.h)/2+pad
@@ -23,20 +22,6 @@ export function mapLabels(world:World):RealmLabel[] {
     return {realm,center,compact}
   })
 }
-export function createMapLayout(world:World,labels:RealmLabel[]) {
-  const reserved:Box[]=labels.map(({center,compact})=>({x:center[0],y:center[1],w:compact?114:158,h:52}))
-  const markers:MapMarker[]=[]
-  const capitalIds=new Set(world.settlements.filter(s=>s.type==='cidade').map(s=>s.provinceId))
-  const candidates=[...world.settlements.filter(s=>s.type==='cidade'),...world.settlements.filter(s=>s.type==='porto').filter((_,i)=>i%3===0),...world.fiefs.map(f=>world.settlements.find(s=>s.provinceId===f.capitalProvinceId&&s.type==='castelo')!).filter(s=>!capitalIds.has(s.provinceId)),...world.settlements.filter(s=>s.type==='porto')]
-  for(const settlement of candidates) {
-    const capital=settlement.type==='cidade',port=settlement.type==='porto',size=capital?27:port?18:19
-    const box={x:settlement.position[0],y:settlement.position[1]-size*.35,w:capital?66:size,h:capital?43:size}
-    if(!capital&&reserved.some(b=>overlap(b,box,12)))continue
-    if(!capital&&markers.length>=28)break
-    markers.push({settlement,kind:port?'port':'castle',size});reserved.push(box)
-  }
-  return {markers}
-}
 export function blendHex(a:string,b:string,strength:number):string {
   const channel=(c:string,i:number)=>parseInt(c.slice(i,i+2),16)
   return '#'+[1,3,5].map(i=>Math.round(channel(a,i)*(1-strength)+channel(b,i)*strength).toString(16).padStart(2,'0')).join('')
@@ -45,4 +30,10 @@ export function mergedOutline(provinces:Province[]):Point[][] {
   if(!provinces.length)return []
   const polygons=provinces.flatMap(p=>p.polygons.map(poly=>[[...poly,poly[0]]]))
   return polygonClipping.union(polygons[0],...polygons.slice(1)).map(p=>p[0].map(p=>[p[0],p[1]] as Point))
+}
+/** Union of provinces as one SVG path, keeping holes (render with fill-rule evenodd). */
+export function unionPath(provinces:Province[]):string {
+  if(!provinces.length)return ''
+  const polygons=provinces.flatMap(p=>p.polygons.map(poly=>[[...poly,poly[0]]] as [number,number][][]))
+  return polygonClipping.union(polygons[0],...polygons.slice(1)).flatMap(polygon=>polygon.map(ring=>`M${ring.map(([x,y])=>`${x.toFixed(1)},${y.toFixed(1)}`).join('L')}Z`)).join(' ')
 }

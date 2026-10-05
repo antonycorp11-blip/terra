@@ -1,149 +1,245 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { hash } from '../engine/random'
 import { MAP_HEIGHT, MAP_WIDTH } from '../engine/geography'
-import type { Point, Province, World } from '../engine/types'
-import { blendHex, createMapLayout, mapLabels, mergedOutline } from './mapArt'
+import { knowledge } from '../engine/knowledge'
+import { canExplore } from '../engine/exploration'
+import { disposition } from '../engine/relationships'
+import type { GameState, Point, Province, Settlement, World } from '../engine/types'
+import { blendHex, mapLabels, mergedOutline, unionPath } from './mapArt'
 import MapSprites from './MapSprites'
 import MapShips from './MapShips'
-import { useUI } from './store'
+import { useUI, type GameMode } from './store'
 import styles from './MapView.module.css'
 
 const polygonPath = (points: Point[]) => `M${points.map(point => `${point[0].toFixed(1)},${point[1].toFixed(1)}`).join('L')}Z`
-const middle = (points: Point[]): Point => [points.reduce((sum, point) => sum + point[0], 0) / points.length, points.reduce((sum, point) => sum + point[1], 0) / points.length]
 const riverPath = (points: Point[]) => points.length < 3 ? `M${points.map(point => point.join(' ')).join('L')}` : `M${points[0].join(' ')}${points.slice(1,-1).map((point,index) => { const next=points[index+2];return `Q${point.join(' ')} ${(point[0]+next[0])/2} ${(point[1]+next[1])/2}` }).join('')}Q${points[points.length-2].join(' ')} ${points[points.length-1].join(' ')}`
-function spreadLabels<T>(items: {item:T;center:Point}[],width=95,height=43): {item:T;center:Point;label:Point}[] {
-  const result = items.map(entry => ({...entry,label:[...entry.center] as Point}))
-  for (let pass=0;pass<18;pass++) for (let i=0;i<result.length;i++) for (let j=i+1;j<result.length;j++) {
-    const dx=result[j].label[0]-result[i].label[0],dy=result[j].label[1]-result[i].label[1]
-    if (Math.abs(dx)<width && Math.abs(dy)<height) {
-      const side=dx===0 ? (i%2 ? 1 : -1) : Math.sign(dx)
-      result[i].label[0]-=side*3; result[j].label[0]+=side*3
-      const vertical=dy===0 ? (i%2 ? -1 : 1) : Math.sign(dy)
-      result[i].label[1]-=vertical*1.5; result[j].label[1]+=vertical*1.5
+const terrainColor: Record<string,string> = { planície:'#a4935d', floresta:'#4f7350', colina:'#8a7f5c', montanha:'#8a8b84', litoral:'#6b8f80', várzea:'#6f9467' }
+const houseColor = (id: string) => `hsl(${hash(id) % 360} 38% 52%)`
+const relationColor = (relation: number) => relation >= 20 ? '#62a05a' : relation >= 0 ? '#c9b55a' : relation >= -25 ? '#c7834a' : '#b04637'
+const MIN_SCALE = .7, MAX_SCALE = 10
+type View = { scale:number; x:number; y:number }
+export interface MapInset { right:number; bottom:number }
+
+/** Static geometry, computed once per world seed. Daily simulation ticks never invalidate it. */
+function useGeometry(world: World) {
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(() => {
+    const provinces = world.provinces
+    const fiefCenter = (ids: string[]): Point => {
+      const members = ids.map(id => provinces.find(p => p.id === id)!).filter(p => p.landmass === 0)
+      const list = members.length ? members : ids.map(id => provinces.find(p => p.id === id)!)
+      const mean: Point = [list.reduce((s,p) => s + p.center[0], 0) / list.length, list.reduce((s,p) => s + p.center[1], 0) / list.length]
+      return list.reduce((best, p) => Math.hypot(p.center[0]-mean[0], p.center[1]-mean[1]) < Math.hypot(best[0]-mean[0], best[1]-mean[1]) ? p.center : best, list[0].center)
     }
-  }
-  return result
+    return {
+      provincePath: new Map(provinces.map(p => [p.id, p.polygons.map(polygonPath).join(' ')])),
+      landPaths: world.landPolygons.map(polygonPath),
+      realmOutlines: world.realms.map(realm => ({ realm, d:mergedOutline(provinces.filter(p => p.realmId === realm.id)).map(polygonPath).join(' ') })),
+      fiefOutlines: world.fiefs.map(fief => ({ fief, d:mergedOutline(provinces.filter(p => p.fiefId === fief.id)).map(polygonPath).join(' ') })),
+      realmLabels: mapLabels(world),
+      fiefLabels: world.fiefs.map(fief => ({ fief, center:fiefCenter(fief.provinceIds) })),
+      centers: new Map(provinces.map(p => [p.id, p.center])),
+      provinces,
+    }
+  }, [world.seed])
 }
-function houseColor(id: string): string { const h = hash(id) % 360; return `hsl(${h} 36% 49%)` }
-const terrainColor: Record<string,string> = { planície:'#a4935d', floresta:'#305e3f', colina:'#776f54', montanha:'#777a76', litoral:'#547d70', várzea:'#568660' }
 
-export default function MapView({ world }: { world: World }) {
-  const { level, mode, selectedRealmId, selectedFiefId, selectedProvinceId, selectedSettlementId, selectRealm, selectFief, selectProvince, selectSettlement } = useUI()
-  const [view, setView] = useState({ scale:1, x:0, y:0 })
-  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 760px)').matches)
-  const [size,setSize] = useState(() => ({width:window.innerWidth,height:window.innerHeight}))
-  const drag = useRef<{ x:number; y:number; startX:number; startY:number; moved:boolean } | null>(null)
+const SETTLEMENT_ICON: Record<string,string> = { castelo:'#art-castle', fortaleza:'#art-castle', cidade:'#art-castle', porto:'#art-port', vila:'#art-village', aldeia:'#ico-hamlet', mina:'#ico-mine', serraria:'#ico-mill', fazenda:'#ico-farm', entreposto:'#ico-trade', mosteiro:'#ico-hamlet', torre:'#ico-hamlet' }
+
+interface ProvinceLayerProps { provinces: Province[]; paths: Map<string,string>; levelKey: string; mode: GameMode; seatId: string; playerHouseId: string; relationKey: string; onPick: (province: Province) => void }
+const ProvinceLayer = memo(function ProvinceLayer({ provinces, paths, levelKey, mode, seatId, playerHouseId, relationKey, onPick }: ProvinceLayerProps) {
+  const relations = new Map(relationKey ? relationKey.split('|').map(entry => { const [id, value] = entry.split(':'); return [id, Number(value)] }) : [])
+  return <g>{provinces.map((province, index) => {
+    const level = Number(levelKey[index])
+    const own = province.governingHouseId === playerHouseId
+    let fill = '#56645c'
+    if (level === 1) fill = blendHex(terrainColor[province.terrain], '#7d8676', .35)
+    else if (level >= 2) {
+      if (mode === 'influenciar') fill = own ? '#d6b35c' : relations.has(province.governingHouseId) ? blendHex(relationColor(relations.get(province.governingHouseId)!), '#b9ad8a', .35) : blendHex(houseColor(province.governingHouseId), '#b7ab87', .45)
+      else if (mode === 'conquistar') fill = own ? '#c79d4c' : blendHex(province.color, '#7f8378', .55)
+      else fill = blendHex(province.color, '#b7ab87', .22)
+    }
+    return <path key={province.id} d={paths.get(province.id)} fill={fill} className={styles.province} data-province={province.id} data-knowledge={level} data-territory={province.realmId} data-own={province.id === seatId || undefined} stroke="#1f2a20" strokeOpacity={level >= 1 ? .6 : .25} strokeWidth=".8" vectorEffect="non-scaling-stroke" onClick={() => onPick(province)}/>
+  })}</g>
+})
+
+export default function MapView({ game, inset }: { game: GameState; inset: MapInset }) {
+  const world = game.world
+  const { mode, selectedProvinceId, selectedSettlementId, focus, selectProvince, selectSettlement } = useUI()
+  const geometry = useGeometry(world)
+  const seat = world.provinces.find(p => p.id === world.houses.find(h => h.id === game.playerHouseId)!.seatProvinceId)!
+  const [size, setSize] = useState(() => ({ width:window.innerWidth, height:window.innerHeight }))
+  const vbWidth = MAP_HEIGHT * size.width / Math.max(1, size.height)
+  const vb = { x:(MAP_WIDTH - vbWidth) / 2, width:vbWidth }
+  const unit = MAP_HEIGHT / Math.max(1, size.height) // viewBox units per screen pixel
+  const focusPoint = (): Point => [vb.x + (size.width - inset.right) / 2 * unit, (size.height - inset.bottom) / 2 * unit + 20 * unit]
+  const [view, setView] = useState<View>(() => { const s = 3; const fx = vb.x + (size.width - inset.right) / 2 * unit, fy = (size.height - inset.bottom) / 2 * unit; return { scale:s, x:fx - seat.center[0] * s, y:fy - seat.center[1] * s } })
   const svg = useRef<SVGSVGElement>(null)
+  const pointers = useRef(new Map<number, { x:number; y:number }>())
+  const gesture = useRef<{ moved:boolean; startX:number; startY:number; pinch?:number } | null>(null)
+  const tween = useRef(0)
+
+  useEffect(() => { const update = () => setSize({ width:window.innerWidth, height:window.innerHeight }); window.addEventListener('resize', update); return () => window.removeEventListener('resize', update) }, [])
+  const toSvg = (clientX: number, clientY: number) => new DOMPoint(clientX, clientY).matrixTransform(svg.current!.getScreenCTM()!.inverse())
+  const zoomAt = (px: number, py: number, factor: number) => setView(previous => { const scale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, previous.scale * factor)); return { scale, x:px - (px - previous.x) / previous.scale * scale, y:py - (py - previous.y) / previous.scale * scale } })
+  // Native, non-passive wheel listener so the page never scrolls or browser-zooms while zooming the map.
   useEffect(() => {
-    const update = () => { setMobile(window.innerWidth <= 760);setSize({width:window.innerWidth,height:window.innerHeight}) }
-    window.addEventListener('resize',update)
-    return () => window.removeEventListener('resize',update)
+    const element = svg.current!
+    const onWheel = (event: WheelEvent) => { event.preventDefault(); const p = toSvg(event.clientX, event.clientY); zoomAt(p.x, p.y, Math.exp(-event.deltaY * (event.ctrlKey ? .01 : .0018))) }
+    element.addEventListener('wheel', onWheel, { passive:false })
+    return () => element.removeEventListener('wheel', onWheel)
   }, [])
-  const viewportWidth = mobile ? Math.max(295,Math.min(590,MAP_HEIGHT*size.width/size.height)) : Math.max(MAP_WIDTH,MAP_HEIGHT*size.width/size.height)
-  const viewport = { x:(MAP_WIDTH-viewportWidth)/2, width:viewportWidth }
-  const provinceById = useMemo(() => new Map(world.provinces.map(item => [item.id,item])), [world])
-  const visible = useMemo(() => world.provinces.filter(province => level === 'reinos' || (level === 'feudos' ? province.realmId === selectedRealmId : level === 'provincias' ? province.fiefId === selectedFiefId : province.id === selectedProvinceId)), [world, level, selectedRealmId, selectedFiefId, selectedProvinceId])
-  useEffect(() => {
-    if (level === 'reinos' || visible.length === 0) { setView({ scale:1, x:0, y:0 }); return }
-    const mainland=visible.filter(province=>province.landmass===0)
-    const points=(mainland.length?mainland:visible).flatMap(province=>province.polygons.flat())
-    const minX=Math.min(...points.map(p=>p[0])),maxX=Math.max(...points.map(p=>p[0]))
-    const minY=Math.min(...points.map(p=>p[1])),maxY=Math.max(...points.map(p=>p[1]))
-    const availableWidth=mobile?viewport.width:viewport.width*(1-380/size.width)
-    const availableHeight=MAP_HEIGHT*(mobile?.43:.9)
-    const scale=Math.min(level==='assentamentos'?5.4:4.5,availableWidth/((maxX-minX)*1.18+(level==='assentamentos'?150:0)),availableHeight/((maxY-minY)*1.18+(level==='assentamentos'?35:0)))
-    setView({scale,x:viewport.x+availableWidth/2-(minX+maxX)/2*scale,y:(mobile?availableHeight/2+12:MAP_HEIGHT/2)-(minY+maxY)/2*scale})
-  },[level,selectedRealmId,selectedFiefId,selectedProvinceId,visible,viewport.width,viewport.x,size.width,mobile])
-
-
-  const labelRealms = useMemo(() => mapLabels(world),[world.provinces,world.realms])
-  const {markers} = useMemo(() => createMapLayout(world,labelRealms),[world.provinces,world.settlements,labelRealms])
-  const realmOutlines = useMemo(() => world.realms.map(realm => ({realm,paths:mergedOutline(world.provinces.filter(province => province.realmId === realm.id))})), [world])
-  const fiefOutlines = useMemo(() => world.fiefs.filter(fief => fief.realmId === selectedRealmId).map(fief => ({fief,paths:mergedOutline(world.provinces.filter(province => province.fiefId === fief.id))})), [world,selectedRealmId])
-  const visibleIds = useMemo(() => new Set(visible.map(province => province.id)), [visible])
-
-  function onProvinceClick(province: Province) {
-    if (drag.current?.moved) return
-    if (level === 'reinos') selectRealm(province.realmId)
-    else if (level === 'feudos') selectFief(province.fiefId, province.realmId)
-    else selectProvince(province.id, province.fiefId, province.realmId)
+  function flyTo(target: Point, minScale: number) {
+    cancelAnimationFrame(tween.current)
+    const start = performance.now(), from = view, [fx, fy] = focusPoint()
+    const scale = Math.max(from.scale, minScale)
+    const to = { scale, x:fx - target[0] * scale, y:fy - target[1] * scale }
+    const step = (now: number) => { const t = Math.min(1, (now - start) / 420), e = 1 - Math.pow(1 - t, 3); setView({ scale:from.scale + (to.scale - from.scale) * e, x:from.x + (to.x - from.x) * e, y:from.y + (to.y - from.y) * e }); if (t < 1) tween.current = requestAnimationFrame(step) }
+    tween.current = requestAnimationFrame(step)
   }
-  function onWheel(event: React.WheelEvent<SVGSVGElement>) {
-    event.preventDefault()
-    const point = new DOMPoint(event.clientX, event.clientY).matrixTransform(svg.current!.getScreenCTM()!.inverse())
-    const px = point.x, py = point.y
-    setView(previous => {
-      const scale = Math.max(.85, Math.min(8, previous.scale * (event.deltaY < 0 ? 1.12 : .89)))
-      return { scale, x:px - (px - previous.x) / previous.scale * scale, y:py - (py - previous.y) / previous.scale * scale }
-    })
+  // Camera moves only on explicit focus requests (notifications, panel links), never on calendar ticks.
+  useEffect(() => { const target = focus && geometry.centers.get(focus.provinceId); if (target) flyTo(target, 3); return () => cancelAnimationFrame(tween.current) }, [focus?.nonce])
+  // When the panel opens over the selected province (phones), slide the map just enough to keep it visible.
+  useEffect(() => {
+    const target = selectedProvinceId && geometry.centers.get(selectedProvinceId); if (!target) return
+    const screenX = (view.x + target[0] * view.scale - vb.x) / unit, screenY = (view.y + target[1] * view.scale) / unit
+    if (screenX > size.width - inset.right - 24 || screenY > size.height - inset.bottom - 24 || screenX < 0 || screenY < 40) flyTo(target, view.scale)
+  }, [selectedProvinceId, inset.right, inset.bottom])
+
+  const levelKey = world.provinces.map(p => knowledge(game, p.id)).join('')
+  const levels = useMemo(() => new Map(world.provinces.map((p, i) => [p.id, Number(levelKey[i])])), [levelKey])
+  // Fog is one merged shape per knowledge level, so no internal province borders leak through it.
+  const fog = useMemo(() => ({ unknown:unionPath(geometry.provinces.filter(p => levels.get(p.id) === 0)), sighted:unionPath(geometry.provinces.filter(p => levels.get(p.id) === 1)) }), [levels, geometry])
+  const explorable = useMemo(() => mode === 'descobrir' ? world.provinces.filter(p => levels.get(p.id) === 1 && canExplore(game, p.id)).map(p => p.id) : [], [levels, mode, game.campaign.expeditions.length, game.campaign.expeditions.filter(e => e.completed).length])
+  const relationKey = game.campaign.contacts.filter(c => c.establishedDay !== null).map(c => `${c.houseId}:${c.relation}`).join('|')
+  // Brief reveal animation whenever a province becomes explored.
+  const previousLevels = useRef(levelKey)
+  const [revealing, setRevealing] = useState<string[]>([])
+  useEffect(() => {
+    const before = previousLevels.current; previousLevels.current = levelKey
+    if (before === levelKey || before.length !== levelKey.length) return
+    const revealed = world.provinces.filter((_, i) => Number(before[i]) < 2 && Number(levelKey[i]) >= 2).map(p => p.id)
+    if (!revealed.length) return
+    setRevealing(revealed); const timer = window.setTimeout(() => setRevealing([]), 2600); return () => window.clearTimeout(timer)
+  }, [levelKey])
+
+  const stablePick = useCallback((province: Province) => { if (gesture.current?.moved) return; useUI.getState().selectProvince(province.id) }, [])
+  function pickSettlement(settlement: Settlement) { if (gesture.current?.moved) return; selectProvince(settlement.provinceId); selectSettlement(settlement.id) }
+  function onPointerDown(event: React.PointerEvent<SVGSVGElement>) {
+    cancelAnimationFrame(tween.current)
+    pointers.current.set(event.pointerId, { x:event.clientX, y:event.clientY })
+    if (pointers.current.size === 1) gesture.current = { moved:false, startX:event.clientX, startY:event.clientY }
+    else if (pointers.current.size === 2) { const [a, b] = [...pointers.current.values()]; gesture.current = { moved:true, startX:0, startY:0, pinch:Math.hypot(a.x - b.x, a.y - b.y) } }
   }
   function onPointerMove(event: React.PointerEvent<SVGSVGElement>) {
-    if (!drag.current) return
-    const travel = Math.hypot(event.clientX - drag.current.startX, event.clientY - drag.current.startY)
-    if (!drag.current.moved && travel <= 4) return
-    if (!drag.current.moved) { drag.current.moved = true; event.currentTarget.setPointerCapture(event.pointerId) }
-    const inverse = svg.current!.getScreenCTM()!.inverse()
-    const previousPoint = new DOMPoint(drag.current.x, drag.current.y).matrixTransform(inverse)
-    const currentPoint = new DOMPoint(event.clientX, event.clientY).matrixTransform(inverse)
-    const dx = currentPoint.x - previousPoint.x
-    const dy = currentPoint.y - previousPoint.y
-    drag.current.x = event.clientX; drag.current.y = event.clientY
+    const last = pointers.current.get(event.pointerId); if (!last || !gesture.current) return
+    if (pointers.current.size === 2 && gesture.current.pinch) {
+      pointers.current.set(event.pointerId, { x:event.clientX, y:event.clientY })
+      const [a, b] = [...pointers.current.values()], distance = Math.hypot(a.x - b.x, a.y - b.y)
+      const mid = toSvg((a.x + b.x) / 2, (a.y + b.y) / 2); zoomAt(mid.x, mid.y, distance / gesture.current.pinch); gesture.current.pinch = distance; return
+    }
+    if (!gesture.current.moved && Math.hypot(event.clientX - gesture.current.startX, event.clientY - gesture.current.startY) <= 5) return
+    if (!gesture.current.moved) { gesture.current.moved = true; event.currentTarget.setPointerCapture(event.pointerId) }
+    const dx = (event.clientX - last.x) * unit, dy = (event.clientY - last.y) * unit
+    pointers.current.set(event.pointerId, { x:event.clientX, y:event.clientY })
     setView(previous => ({ ...previous, x:previous.x + dx, y:previous.y + dy }))
   }
-  function zoom(factor: number) { setView(previous => { const scale = Math.max(.85,Math.min(8,previous.scale * factor)); return { scale, x:550 - (550-previous.x)/previous.scale*scale, y:360-(360-previous.y)/previous.scale*scale } }) }
+  function onPointerUp(event: React.PointerEvent<SVGSVGElement>) { pointers.current.delete(event.pointerId); if (pointers.current.size === 0) setTimeout(() => { gesture.current = null }, 0) }
+  function zoomButton(factor: number) { const [fx, fy] = focusPoint(); zoomAt(fx, fy, factor) }
+  function recenter() { const [fx, fy] = focusPoint(); const scale = 3; setView({ scale, x:fx - seat.center[0] * scale, y:fy - seat.center[1] * scale }) }
 
-  const labelFiefs = level === 'feudos' ? spreadLabels(world.fiefs.filter(fief => fief.realmId === selectedRealmId).map(fief => ({ item:fief, center:middle(fief.provinceIds.map(id => provinceById.get(id)!.center)) }))) : []
-  const labelProvinces = level === 'provincias' ? spreadLabels(world.provinces.filter(province => province.fiefId === selectedFiefId).map(province=>({item:province,center:province.center})),63,26) : []
-  const focusedProvince = provinceById.get(selectedProvinceId || '')
-  const settlementLabels=level==='assentamentos'&&focusedProvince ? world.settlements.filter(s=>s.provinceId===focusedProvince.id).sort((a,b)=>a.position[1]-b.position[1]).map((settlement,index,all)=>{
-    const minX=Math.min(...focusedProvince.polygon.map(p=>p[0])),maxX=Math.max(...focusedProvince.polygon.map(p=>p[0]))
-    const minY=Math.min(...focusedProvince.polygon.map(p=>p[1])),maxY=Math.max(...focusedProvince.polygon.map(p=>p[1]))
-    const side=index%2===0?-1:1
-    return {settlement,side,x:side===-1?minX-8:maxX+8,y:minY+5+(maxY-minY-10)*index/Math.max(1,all.length-1)}
-  }):[]
-  const activeLabels = level==='feudos' ? labelFiefs.map(({label})=>({x:label[0],y:label[1]+13,w:104,h:45})) : level==='provincias' ? labelProvinces.map(({label})=>({x:label[0],y:label[1]+10,w:74,h:30})) : level==='assentamentos' ? settlementLabels.map(({x,y,side})=>({x:x+side*28,y,w:60,h:13})) : []
-  const clearOfLabel=(x:number,y:number,size:number)=>(level!=='assentamentos'||!settlementLabels.some(({settlement})=>Math.hypot(x-settlement.position[0],y-settlement.position[1])<size*.65+11))&&!activeLabels.some(b=>Math.abs(x-b.x)<(b.w+size)/2&&Math.abs(y-b.y)<(b.h+size)/2)
-
-
+  const s = view.scale, k = 1 / s
+  const knownRealms = new Set(world.provinces.filter(p => (levels.get(p.id) ?? 0) >= 2).map(p => p.realmId))
+  const knownFiefs = new Set(world.provinces.filter(p => (levels.get(p.id) ?? 0) >= 2).map(p => p.fiefId))
+  const exploredProvinces = world.provinces.filter(p => (levels.get(p.id) ?? 0) >= 2)
+  const showSettlements = s >= 2.3, showSettlementNames = s >= 4.6, showProvinceNames = s >= 2.5, showFiefNames = s >= 1.5 && s < 4.2, showRealmNames = s < 2.4
+  const selected = world.provinces.find(p => p.id === selectedProvinceId)
+  const activeExpeditions = game.campaign.expeditions.filter(e => !e.completed)
+  const pendingEnvoys = game.campaign.diplomacy.filter(d => !d.completed)
+  const activeSpies = game.campaign.spyMissions.filter(m => !m.completed)
+  const routeAt = (route: string[], t: number): Point => { const pts = route.map(id => geometry.centers.get(id)!); if (pts.length < 2) return pts[0]; const f = Math.min(.999, Math.max(0, t)) * (pts.length - 1), i = Math.floor(f), r = f - i; return [pts[i][0] + (pts[i+1][0] - pts[i][0]) * r, pts[i][1] + (pts[i+1][1] - pts[i][1]) * r] }
+  const routeD = (route: string[]) => `M${route.map(id => geometry.centers.get(id)!.join(' ')).join('L')}`
+  const latestReport = (provinceId: string) => game.campaign.reports.filter(r => r.provinceId === provinceId && r.garrison !== undefined && r.expiresDay >= game.day).at(-1)
 
   return <div className={styles.mapShell}>
-    <svg ref={svg} className={styles.map} viewBox={`${viewport.x} 0 ${viewport.width} ${MAP_HEIGHT}`} onWheel={onWheel} onPointerDown={event => { drag.current = { x:event.clientX,y:event.clientY,startX:event.clientX,startY:event.clientY,moved:false } }} onPointerMove={onPointerMove} onPointerUp={() => { setTimeout(() => { drag.current = null }, 0) }} onPointerCancel={() => { drag.current = null }} aria-label="Mapa político interativo de Varedor">
+    <svg ref={svg} className={styles.map} viewBox={`${vb.x} 0 ${vb.width} ${MAP_HEIGHT}`} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerCancel={onPointerUp} role="img" aria-label="Mapa político interativo de Varedor" data-scale={s.toFixed(2)}>
       <defs>
         <radialGradient id="sea" cx="58%" cy="55%" r="75%"><stop stopColor="#2d7783"/><stop offset=".52" stopColor="#205467"/><stop offset="1" stopColor="#142f43"/></radialGradient>
         <pattern id="waves" width="126" height="87" patternUnits="userSpaceOnUse"><path d="M3 22q30-4 60 0m-24 44q28-3 54 0M96 44h17" fill="none" stroke="#b4d9dc" strokeOpacity=".055" strokeWidth=".6"/></pattern>
+        <radialGradient id="cloud"><stop stopColor="#a9b8b2" stopOpacity=".5"/><stop offset="1" stopColor="#a9b8b2" stopOpacity="0"/></radialGradient>
+        <pattern id="fogTexture" width="120" height="96" patternUnits="userSpaceOnUse"><rect width="120" height="96" fill="#3a4b4c"/><ellipse cx="32" cy="24" rx="28" ry="12" fill="url(#cloud)"/><ellipse cx="86" cy="62" rx="30" ry="13" fill="url(#cloud)"/><ellipse cx="36" cy="78" rx="22" ry="9" fill="url(#cloud)" opacity=".7"/><ellipse cx="96" cy="16" rx="18" ry="8" fill="url(#cloud)" opacity=".6"/></pattern>
+        <pattern id="hazeTexture" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(35)"><rect width="6" height="6" fill="#e3e8df" opacity=".2"/><path d="M0 3h6" stroke="#f3f6ef" strokeOpacity=".14" strokeWidth="1"/></pattern>
         <MapSprites/>
-        <clipPath id="landClip">{world.landPolygons.map((land,i)=><path key={i} d={polygonPath(land)}/>)}</clipPath>
+        <symbol id="ico-mine" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#33424a" stroke="#e8cf95" strokeWidth="1.6"/><path d="M7 17l7-7m-3-3c3-1 6 0 7 3l-2 0c-1-1-3-2-5-1Z" stroke="#f3e2b8" strokeWidth="1.8" fill="#f3e2b8"/></symbol>
+        <symbol id="ico-mill" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#4f3a24" stroke="#e8cf95" strokeWidth="1.6"/><path d="M6 14h12v3H6Zm2-5h8v3H8Z" fill="#e9c98d"/></symbol>
+        <symbol id="ico-farm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#6b7a2e" stroke="#e8cf95" strokeWidth="1.6"/><path d="M12 5c-1 3-1 5 0 7 1-2 1-4 0-7Zm-3 5c0 3 1 4 3 5m3-5c0 3-1 4-3 5m0-3v6" stroke="#f6e4a8" strokeWidth="1.4" fill="#f6e4a8"/></symbol>
+        <symbol id="ico-trade" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#7a3f2c" stroke="#e8cf95" strokeWidth="1.6"/><path d="M6 11l6-5 6 5Zm1 1h10v6H7Z" fill="#f2dcae"/></symbol>
+        <symbol id="ico-hamlet" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#5b4a36" stroke="#e8cf95" strokeWidth="1.6"/><path d="M6 13l6-6 6 6v5H6Z" fill="#f2dcae"/></symbol>
+        <clipPath id="landClip">{geometry.landPaths.map((d,i) => <path key={i} d={d}/>)}</clipPath>
         <filter id="relief"><feTurbulence type="fractalNoise" baseFrequency=".45" numOctaves="3" seed="17"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".8"/></feComponentTransfer></filter>
         <filter id="coastGlow"><feGaussianBlur stdDeviation="2"/></filter>
-        <filter id="labelShadow"><feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#08141c" floodOpacity=".9"/></filter>
       </defs>
-      <rect x={viewport.x} width={viewport.width} height={MAP_HEIGHT} fill="url(#sea)"/><rect x={viewport.x} width={viewport.width} height={MAP_HEIGHT} fill="url(#waves)"/>
-      <g transform={`translate(${view.x} ${view.y}) scale(${view.scale})`}>
-        {world.landPolygons.map((land,i)=><g key={i} pointerEvents="none"><path d={polygonPath(land)} fill="#638858" stroke="#3b9ca2" strokeWidth="14" strokeOpacity=".2" filter="url(#coastGlow)"/><path d={polygonPath(land)} fill="#81a061" stroke="#8ac6af" strokeWidth="4" strokeOpacity=".3"/><path d={polygonPath(land)} fill="#9bb16c" stroke="#173e42" strokeWidth="1.7"/></g>)}
-        {world.provinces.map(province => {
-          const isVisible = visibleIds.has(province.id)
-          const fill = mode === 'terreno' ? terrainColor[province.terrain] : mode === 'casas' ? houseColor(province.legalHouseId) : blendHex(province.color,'#b7ab87',.2)
-          const sameBoundary = level === 'reinos' ? province.realmId : level === 'feudos' ? province.fiefId : province.id
-          return <path key={province.id} d={province.polygons.map(polygonPath).join(' ')} fill={isVisible||mode==='casas'?fill:blendHex(province.color,'#657575',.68)} fillOpacity={1} stroke="#293225" strokeOpacity={level === 'reinos' ? .19 : level === 'feudos' ? .24 : .5} strokeWidth={level === 'assentamentos'&&isVisible ? 2 : .65} vectorEffect="non-scaling-stroke" className={styles.province} onClick={() => onProvinceClick(province)} data-territory={sameBoundary}/>
-        })}
-        <g clipPath="url(#landClip)" pointerEvents="none"><rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="#fff" opacity=".15" filter="url(#relief)" style={{mixBlendMode:'multiply'}}/></g>
-        <g pointerEvents="none" opacity={level === 'reinos' ? 0 : .24} clipPath="url(#landClip)">{world.roads.map(([from,to],index) => { const a=provinceById.get(from)!.center,b=provinceById.get(to)!.center; return <path key={index} d={`M${a[0]} ${a[1]}L${b[0]} ${b[1]}`} stroke="#f8e4ad" strokeWidth="1" strokeDasharray="3 3" fill="none"/> })}</g>
-        <g pointerEvents="none">{world.rivers.map((river,index) => <g key={index}><path d={riverPath(river)} stroke="#244c5e" strokeWidth="2.4" vectorEffect="non-scaling-stroke" fill="none" strokeLinecap="round" strokeLinejoin="round"/><path d={riverPath(river)} stroke="#78b9c2" strokeWidth="1.2" vectorEffect="non-scaling-stroke" fill="none" strokeLinecap="round" strokeLinejoin="round"/></g>)}</g>
-        {realmOutlines.map(({realm,paths}) => paths.map((points,index) => <g key={`${realm.id}-${index}`} pointerEvents="none"><path d={polygonPath(points)} fill="none" stroke="#122630" strokeWidth="2.4" vectorEffect="non-scaling-stroke" strokeLinejoin="round" opacity=".95"/><path d={polygonPath(points)} fill="none" stroke={realm.accent} strokeWidth=".85" vectorEffect="non-scaling-stroke" strokeLinejoin="round" opacity={level === 'assentamentos' ? .65 : .98}/></g>))}
-        {(level === 'feudos' || level === 'provincias') && fiefOutlines.map(({fief,paths}) => paths.map((points,index) => <path key={`${fief.id}-${index}`} d={polygonPath(points)} fill="none" stroke="#f3d59b" strokeWidth="1" vectorEffect="non-scaling-stroke" strokeDasharray="4 3" opacity=".87" pointerEvents="none"/>))}
-        {world.landPolygons.map((land,i)=><path key={i} d={polygonPath(land)} fill="none" stroke="#efcf8e" strokeWidth=".8" vectorEffect="non-scaling-stroke" pointerEvents="none"/>)}
-        <g pointerEvents="none">{markers.filter(({settlement,size})=>level!=='assentamentos'&&(level==='reinos'?(settlement.type==='cidade'||settlement.type==='porto'):visibleIds.has(settlement.provinceId))&&clearOfLabel(settlement.position[0],settlement.position[1]-size*.3,size)).map(({settlement,kind,size})=><g key={settlement.id} data-map-building={settlement.id}><ellipse cx={settlement.position[0]} cy={settlement.position[1]+1} rx={size*.3} ry={size*.08} fill="#172c21" opacity=".22"/><use href={`#art-${kind}`} x={settlement.position[0]-size/2} y={settlement.position[1]-size*.78} width={size} height={size}/>{settlement.type==='cidade'&&<text x={settlement.position[0]} y={settlement.position[1]+10} textAnchor="middle" fill="#fff3d3" fontSize="7.5" className={styles.cityLabel}>{settlement.name}</text>}</g>)}</g>
-        <MapShips routes={world.seaRoutes}/>
-        {level==='reinos'&&<g pointerEvents="none"><text x="177" y="82" className={styles.seaName}>MAR DAS BRUMAS</text><text x="638" y="494" className={styles.innerSeaName}>Mar de</text><text x="638" y="516" className={styles.innerSeaName}>Safira</text><text x="545" y="700" className={styles.seaName}>OCEANO DE VAREDOR</text><text x="77" y="590" className={styles.islandName} transform="rotate(-62 77 590)">ILHAS DAS MARÉS</text></g>}
-        {level==='reinos'&&labelRealms.map(({realm,center,compact})=>{const royal=world.houses.find(house=>house.id===realm.royalHouseId)!;const width=compact?114:158;return <g key={realm.id} data-map-label={realm.id} className={styles.realmLabel} transform={`translate(${center[0]} ${center[1]})`} onClick={()=>selectRealm(realm.id)}><rect x={-width/2} y="-28" width={width} height="52" fill="transparent" pointerEvents="all"/><path id={`title-${realm.id}`} d={`M${-width/2} -2Q0 -13 ${width/2} -2`} fill="none" stroke="none"/><text className={styles.realmName} fontSize={compact?17:21}><textPath href={`#title-${realm.id}`} startOffset="50%" textAnchor="middle">{realm.name.toLocaleUpperCase('pt-BR')}</textPath></text><text className={styles.houseName} y="15" textAnchor="middle" fontSize="6.5">{royal.name.toLocaleUpperCase('pt-BR')}</text></g>})}
-        {labelFiefs.map(({item:fief,center,label}) => <g key={fief.id} className={styles.fiefLabel} onClick={() => selectFief(fief.id,fief.realmId)}>{Math.hypot(label[0]-center[0],label[1]-center[1])>8 && <path d={`M${center[0]} ${center[1]}L${label[0]} ${label[1]}`} stroke="#f2dbb3" strokeOpacity=".6" strokeWidth="1" strokeDasharray="2 2"/>}<g transform={`translate(${label[0]} ${label[1]})`}><circle r="11" fill="#172633" stroke="#e6c78d" strokeWidth="1"/><text y="4" textAnchor="middle" fill="#e6c78d" fontSize="12">✦</text><text y="28" textAnchor="middle" fill="#fff2d5" fontSize="15" filter="url(#labelShadow)">{fief.name}</text></g></g>)}
-        {labelProvinces.map(({item:province,center,label})=><g key={province.id} className={styles.fiefLabel} onClick={()=>selectProvince(province.id,province.fiefId,province.realmId)}><path d={`M${center.join(' ')}L${label[0]} ${label[1]+10}`} stroke="#efdbad" strokeWidth=".6" strokeDasharray="2 2"/><circle cx={center[0]} cy={center[1]} r="4" fill="#122932" stroke="#e6c78d" strokeWidth="1"/><rect x={label[0]-35} y={label[1]+4} width="70" height="15" fill="transparent" pointerEvents="all"/><text x={label[0]} y={label[1]+15} textAnchor="middle" fill="#fff4d9" fontSize="8.5" filter="url(#labelShadow)">{province.name}</text></g>)}
-        {settlementLabels.map(({settlement,side,x,y})=><g key={settlement.id} className={styles.settlement} onClick={()=>selectSettlement(settlement.id)} role="button" tabIndex={0} aria-label={`Selecionar ${settlement.name}`} onKeyDown={event=>{if(event.key==='Enter'||event.key===' ')selectSettlement(settlement.id)}}><path d={`M${settlement.position.join(' ')}L${x} ${y}`} stroke="#f7e2a3" strokeWidth=".5" strokeDasharray="1.3 1"/><use href={settlement.type==='castelo'?'#art-castle':settlement.type==='porto'?'#art-port':'#art-village'} x={settlement.position[0]-5} y={settlement.position[1]-8} width="10" height="10"/><circle cx={settlement.position[0]} cy={settlement.position[1]+2} r="1.1" fill={settlement.id===selectedSettlementId?'#f1cc6c':'#153843'} stroke="#f0d69b" strokeWidth=".3"/><rect x={side===-1?x-56:x} y={y-4} width="56" height="9" fill="#123440" fillOpacity=".86" rx="1" pointerEvents="all"/><text x={x+side*2} y={y+1.2} textAnchor={side===-1?'end':'start'} fontSize="3.2" fill="#fff3d9" style={{strokeWidth:'.35px'}}>{settlement.name}</text></g>)}
+      <rect x={vb.x} width={vb.width} height={MAP_HEIGHT} fill="url(#sea)"/><rect x={vb.x} width={vb.width} height={MAP_HEIGHT} fill="url(#waves)"/>
+      <g transform={`translate(${view.x} ${view.y}) scale(${s})`}>
+        {geometry.landPaths.map((d,i) => <g key={i} pointerEvents="none"><path d={d} fill="#638858" stroke="#3b9ca2" strokeWidth="14" strokeOpacity=".2" filter="url(#coastGlow)"/><path d={d} fill="#81a061" stroke="#173e42" strokeWidth="1.7"/></g>)}
+        <ProvinceLayer provinces={geometry.provinces} paths={geometry.provincePath} levelKey={levelKey} mode={mode} seatId={seat.id} playerHouseId={game.playerHouseId} relationKey={relationKey} onPick={stablePick}/>
+        <g clipPath="url(#landClip)" pointerEvents="none"><rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="#fff" opacity=".13" filter="url(#relief)" style={{ mixBlendMode:'multiply' }}/></g>
+        <g pointerEvents="none" opacity=".45">{world.roads.filter(([a, b]) => (levels.get(a) ?? 0) >= 2 && (levels.get(b) ?? 0) >= 1).map(([from, to]) => { const a = geometry.centers.get(from)!, b = geometry.centers.get(to)!; return <path key={`${from}-${to}`} d={`M${a[0]} ${a[1]}L${b[0]} ${b[1]}`} stroke="#f8e4ad" strokeWidth="1.2" strokeDasharray="3 3" vectorEffect="non-scaling-stroke" fill="none"/> })}</g>
+        <g pointerEvents="none">{world.rivers.map((river,index) => <g key={index}><path d={riverPath(river)} stroke="#244c5e" strokeWidth="2.4" vectorEffect="non-scaling-stroke" fill="none" strokeLinecap="round"/><path d={riverPath(river)} stroke="#78b9c2" strokeWidth="1.2" vectorEffect="non-scaling-stroke" fill="none" strokeLinecap="round"/></g>)}</g>
+        <g pointerEvents="none" data-layer="fief-borders">{geometry.fiefOutlines.map(({ fief, d }) => <g key={fief.id}><path d={d} fill="none" stroke="#2b2418" strokeOpacity=".5" strokeWidth="2.6" vectorEffect="non-scaling-stroke" strokeLinejoin="round"/><path d={d} fill="none" stroke="#f3d59b" strokeWidth="1.1" strokeDasharray="6 3" vectorEffect="non-scaling-stroke" strokeLinejoin="round" opacity=".9"/></g>)}</g>
+        <g pointerEvents="none" data-layer="realm-borders">{geometry.realmOutlines.map(({ realm, d }) => <g key={realm.id}><path d={d} fill="none" stroke="#0f1d24" strokeWidth="4.4" vectorEffect="non-scaling-stroke" strokeLinejoin="round"/><path d={d} fill="none" stroke={realm.accent} strokeWidth="1.8" vectorEffect="non-scaling-stroke" strokeLinejoin="round"/></g>)}</g>
+        {geometry.landPaths.map((d,i) => <path key={i} d={d} fill="none" stroke="#efcf8e" strokeWidth=".8" vectorEffect="non-scaling-stroke" pointerEvents="none"/>)}
 
+        <g pointerEvents="none" data-layer="fog" className={styles.fog}>
+          {fog.sighted && <path d={fog.sighted} fill="url(#hazeTexture)" fillRule="evenodd"/>}
+          {fog.unknown && <><path d={fog.unknown} fill="none" stroke="#3a4b4c" strokeOpacity=".22" strokeWidth="14" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/><path d={fog.unknown} fill="none" stroke="#3a4b4c" strokeOpacity=".4" strokeWidth="6" strokeLinejoin="round" vectorEffect="non-scaling-stroke"/><path d={fog.unknown} fill="url(#fogTexture)" fillRule="evenodd" opacity=".97"/></>}
+          {revealing.map(id => <g key={id} className={styles.reveal}><path d={geometry.provincePath.get(id)} fill="url(#fogTexture)" className={styles.revealFog}/><path d={geometry.provincePath.get(id)} fill="none" stroke="#ffe39a" strokeWidth="4" vectorEffect="non-scaling-stroke" className={styles.revealGlow}/></g>)}
+        </g>
+
+        <g pointerEvents="none">
+          {explorable.map(id => <path key={id} d={geometry.provincePath.get(id)} fill="#ffe08a" fillOpacity=".08" stroke="#ffe08a" strokeWidth="2" strokeDasharray="7 5" vectorEffect="non-scaling-stroke" className={styles.explorable} data-explorable={id}/>)}
+          <path d={geometry.provincePath.get(seat.id)} fill="none" stroke="#ffd76e" strokeOpacity=".35" strokeWidth="9" vectorEffect="non-scaling-stroke"/>
+          <path d={geometry.provincePath.get(seat.id)} fill="none" stroke="#ffd76e" strokeWidth="2.6" vectorEffect="non-scaling-stroke" data-player-seat/>
+          {selected && <g data-selected={selected.id}><path d={geometry.provincePath.get(selected.id)} fill="#fff6d8" fillOpacity=".13" stroke="#0c1820" strokeOpacity=".6" strokeWidth="6" vectorEffect="non-scaling-stroke"/><path d={geometry.provincePath.get(selected.id)} fill="none" stroke="#fff6d8" strokeWidth="2.8" vectorEffect="non-scaling-stroke" className={styles.selectedOutline}/></g>}
+        </g>
+
+        {showSettlements && <g data-layer="settlements">{exploredProvinces.flatMap(p => p.settlementIds).map(id => world.settlements.find(s => s.id === id)!).map(settlement => {
+          const big = settlement.type === 'cidade' || settlement.type === 'castelo' || settlement.type === 'fortaleza'
+          const sprite = SETTLEMENT_ICON[settlement.type] ?? '#ico-hamlet', vector = sprite.startsWith('#ico'), size = (vector ? 13 : big ? 26 : 20) * k * Math.min(1.6, Math.sqrt(s / 2.3))
+          return <g key={settlement.id} className={styles.settlement} data-map-building={settlement.id} data-type={settlement.type} onClick={() => pickSettlement(settlement)} role="button" aria-label={`Selecionar ${settlement.name}`}>
+            <use href={sprite} x={settlement.position[0] - size / 2} y={settlement.position[1] - size * (vector ? .5 : .78)} width={size} height={size}/>
+            {settlement.id === selectedSettlementId && <circle cx={settlement.position[0]} cy={settlement.position[1]} r={size * .62} fill="none" stroke="#ffe8a8" strokeWidth={1.6 * k}/>}
+            {showSettlementNames && <text x={settlement.position[0]} y={settlement.position[1] + size * .55 + 8 * k} fontSize={9 * k} textAnchor="middle" className={styles.settlementName}>{settlement.name}</text>}
+          </g>
+        })}</g>}
+
+        <MapShips routes={world.seaRoutes}/>
+
+        <g pointerEvents="none" data-layer="labels">
+          {showRealmNames && geometry.realmLabels.filter(({ realm }) => knownRealms.has(realm.id)).map(({ realm, center, compact }) => <text key={realm.id} data-map-label={realm.id} x={center[0]} y={center[1]} fontSize={(compact ? 15 : 19) * Math.min(1.4, Math.max(.75, 1 / Math.sqrt(s)))} className={styles.realmName} style={{ opacity:Math.min(1, (2.4 - s) * 1.6) }}>{realm.name.toLocaleUpperCase('pt-BR')}</text>)}
+          {showFiefNames && geometry.fiefLabels.filter(({ fief }) => knownFiefs.has(fief.id)).map(({ fief, center }) => <text key={fief.id} data-fief-label={fief.id} x={center[0]} y={center[1] - 10 * k} fontSize={12 * k} className={styles.fiefName}>{fief.name}</text>)}
+          {showProvinceNames && exploredProvinces.map(p => <text key={p.id} data-province-label={p.id} x={p.center[0]} y={p.center[1] + (showSettlements ? 16 : 3) * k} fontSize={(p.id === seat.id ? 11 : 9.5) * k} className={p.id === seat.id ? `${styles.provinceName} ${styles.seatName}` : styles.provinceName}>{p.name}</text>)}
+        </g>
+
+        <g pointerEvents="none" data-layer="markers">
+          {(mode === 'descobrir' || mode === 'influenciar') && game.campaign.contacts.map(contact => { const c = geometry.centers.get(contact.provinceId)!; const established = contact.establishedDay !== null; return <g key={contact.houseId} data-diplomatic-marker={contact.houseId} transform={`translate(${c[0] + 9 * k} ${c[1] - 9 * k}) scale(${k})`}><circle r="6.5" fill={established ? relationColor(contact.relation) : '#6b6f73'} stroke="#fff1c9" strokeWidth="1.4"/><text y="3" fontSize="8" textAnchor="middle" fill="#14232b" fontWeight="700">{established ? (contact.trade ? '⚖' : '✉') : '…'}</text><title>{established ? disposition(contact.relation) : 'Emissário a caminho'}</title></g> })}
+          {mode === 'descobrir' && pendingEnvoys.filter(d => d.kind === 'emissary').map(d => { const route = [seat.id, d.provinceId], t = (game.day - d.startDay) / Math.max(1, d.endDay - d.startDay), p = routeAt(route, t); return <g key={d.id}><path d={routeD(route)} stroke="#e7d9b5" strokeWidth="1.4" strokeDasharray="2 4" vectorEffect="non-scaling-stroke" fill="none"/><circle cx={p[0]} cy={p[1]} r={3.5 * k} fill="#f3e6c4" stroke="#20313b" strokeWidth={k}/></g> })}
+          {mode === 'descobrir' && activeExpeditions.map(e => { const t = (game.day - e.startDay) / Math.max(1, e.endDay - e.startDay), p = routeAt(e.route, t), target = geometry.centers.get(e.provinceId)!; return <g key={e.id} data-expedition-marker={e.provinceId}>
+            <path d={routeD(e.route)} stroke="#ffd36e" strokeWidth="2" strokeDasharray="1 5" strokeLinecap="round" vectorEffect="non-scaling-stroke" fill="none"/>
+            <g transform={`translate(${target[0]} ${target[1]}) scale(${k})`}><circle r="11" fill="#13232c" fillOpacity=".75" stroke="#ffd36e" strokeWidth="1"/><circle r="11" fill="none" stroke="#ffd36e" strokeWidth="3" strokeDasharray={`${Math.min(1, t) * 69.1} 69.1`} transform="rotate(-90)"/><text y="4" fontSize="10" textAnchor="middle" fill="#ffe8b0">{Math.max(0, e.endDay - game.day)}d</text></g>
+            <g transform={`translate(${p[0]} ${p[1]}) scale(${k})`} className={styles.walker}><path d="M0 -12V4M0 -12l9 3-9 3" stroke="#ffd36e" strokeWidth="1.6" fill="#c0392b"/><circle r="3" cy="5" fill="#ffd36e"/></g>
+          </g> })}
+          {mode === 'influenciar' && activeSpies.map(m => { const c = geometry.centers.get(m.provinceId)!; return <g key={m.id} data-spy-marker={m.provinceId}><path d={routeD(m.route)} stroke="#b8a6d9" strokeWidth="1.4" strokeDasharray="2 4" vectorEffect="non-scaling-stroke" fill="none"/><g transform={`translate(${c[0] - 10 * k} ${c[1] - 10 * k}) scale(${k})`}><circle r="8" fill="#2a2140" stroke="#d3c3f2"/><path d="M-5 0Q0 -5 5 0Q0 5 -5 0Z" fill="#e9defa"/><circle r="1.8" fill="#2a2140"/></g></g> })}
+          {mode === 'conquistar' && world.provinces.filter(p => p.governingHouseId === game.playerHouseId || latestReport(p.id)).map(p => { const own = p.governingHouseId === game.playerHouseId; const value = own ? world.settlements.filter(s => s.provinceId === p.id).reduce((n, s) => n + s.garrison, 0) : latestReport(p.id)!.garrison!; return <g key={p.id} data-garrison={p.id} transform={`translate(${p.center[0]} ${p.center[1] - 14 * k}) scale(${k})`}><path d="M-11 -9h22v8c0 7-5 11-11 13-6-2-11-6-11-13Z" fill={own ? '#2f4f63' : '#5b2b28'} stroke="#f0d08e" strokeWidth="1.2"/><text y="3" fontSize="8.5" textAnchor="middle" fill="#fff0cf" fontWeight="700">{own ? value : `~${value}`}</text></g> })}
+        </g>
       </g>
     </svg>
-    {(level !== 'reinos' || mobile) && <div className={styles.minimap}><div>VAREDOR</div><svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} preserveAspectRatio="none" aria-label="Mini-mapa: clique para centralizar" onClick={event => { const bounds = event.currentTarget.getBoundingClientRect(); const px = (event.clientX-bounds.left)/bounds.width*MAP_WIDTH; const py = (event.clientY-bounds.top)/bounds.height*MAP_HEIGHT; setView(previous => ({...previous,x:viewport.x+viewport.width/2-px*previous.scale,y:MAP_HEIGHT/2-py*previous.scale})) }}><rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="#0e4456"/>{world.landPolygons.map((land,i)=><path key={i} d={polygonPath(land)} fill="#927d59"/>)}{world.provinces.map(province => <path key={province.id} d={province.polygons.map(polygonPath).join(' ')} fill={province.color} fillOpacity=".9"/>)}<rect x={(viewport.x-view.x)/view.scale} y={-view.y/view.scale} width={viewport.width/view.scale} height={MAP_HEIGHT/view.scale} fill="none" stroke="#fff4c8" strokeWidth={8/view.scale}/></svg></div>}
-    <div className={styles.compass}><span>N</span><strong>✥</strong><span>S</span></div>
-    <div className={styles.controls}><button onClick={() => zoom(1.25)} title="Aproximar">＋</button><button onClick={() => zoom(.8)} title="Afastar">−</button><button onClick={() => setView({scale:1,x:0,y:0})} title="Mostrar continente">⌖</button></div>
+    <Minimap world={world} levelKey={levelKey} paths={geometry.provincePath} land={geometry.landPaths} view={view} vb={vb} onJump={(px, py) => { const [fx, fy] = focusPoint(); setView(previous => ({ ...previous, x:fx - px * previous.scale, y:fy - py * previous.scale })) }}/>
+    <div className={styles.controls}><button onClick={() => zoomButton(1.3)} title="Aproximar" aria-label="Aproximar">＋</button><button onClick={() => zoomButton(1 / 1.3)} title="Afastar" aria-label="Afastar">−</button><button onClick={recenter} title="Centralizar em Pontevela" aria-label="Centralizar no domínio">⌖</button></div>
   </div>
 }
+
+const Minimap = memo(function Minimap({ world, levelKey, paths, land, view, vb, onJump }: { world: World; levelKey: string; paths: Map<string,string>; land: string[]; view: View; vb: { x:number; width:number }; onJump: (x: number, y: number) => void }) {
+  const base = useMemo(() => <>{land.map((d, i) => <path key={i} d={d} fill="#2e4a4f"/>)}{world.provinces.map((p, i) => Number(levelKey[i]) >= 1 && <path key={p.id} d={paths.get(p.id)} fill={Number(levelKey[i]) >= 2 ? p.color : '#7d8a80'} fillOpacity={Number(levelKey[i]) >= 2 ? .95 : .6}/>)}</>, [levelKey, paths, land])
+  return <div className={styles.minimap}><div>VAREDOR</div><svg viewBox={`0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`} preserveAspectRatio="none" aria-label="Mini-mapa: toque para centralizar" onClick={event => { const bounds = event.currentTarget.getBoundingClientRect(); onJump((event.clientX - bounds.left) / bounds.width * MAP_WIDTH, (event.clientY - bounds.top) / bounds.height * MAP_HEIGHT) }}><rect width={MAP_WIDTH} height={MAP_HEIGHT} fill="#0e4456"/>{base}<rect x={(vb.x - view.x) / view.scale} y={-view.y / view.scale} width={vb.width / view.scale} height={MAP_HEIGHT / view.scale} fill="none" stroke="#fff4c8" strokeWidth={Math.max(4, 10 / view.scale)}/></svg></div>
+})

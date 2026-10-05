@@ -1,6 +1,31 @@
 # Plano de testes
 
-A bateria atual valida os invariantes territoriais e a navegação fundamental da Fase 1. Os testes das fases 2–10 permanecem pendentes até que os sistemas correspondentes existam.
+A bateria atual valida os invariantes territoriais da Fase 1 e o ciclo jogável do MVP (`docs/MVP_SCOPE.md`). Os testes dos sistemas ainda não implementados das fases 2–10 permanecem pendentes.
+
+## Cobertura atual
+
+`src/engine/world.test.ts` (Vitest) cobre a geografia: 7 reinos, 42 feudos, 252 províncias, 1.008 assentamentos, 133 casas, cobertura sem lacunas, vizinhança recíproca e conectada, ilhas, rotas marítimas, rios descendentes, determinismo, calendário, migração geográfica e a audiência de Pontevela.
+
+`src/engine/mvp.test.ts` (Vitest) cobre:
+
+- **Criação da casa**: nome, brasão, cores, persistência, IDs estáveis, validações e bloqueio após o dia 0.
+- **Exploração**: névoa inicial, alcance, custos, duração, limite de duas expedições, revelação, achados reais e persistência.
+- **Economia**: saldo mensal de +80/+90/+45/+15, desconto dos investimentos, conclusão, benefícios permanentes e falta de recursos.
+- **Diplomacia**: pré-requisito de exploração, primeiro contato com as razões da relação, personalidades distintas entre vizinhos, presente com intervalo, aproximação, comércio e recusa quando hostil.
+- **Espionagem**: custo, limite de três, manutenção, alcance, resultados de sucesso e de falha, e relatórios com fonte, confiança e validade.
+- **Personagens**: contato obrigatório, efeitos na relação, memória, intervalo de repetição e respostas conforme o temperamento.
+- **Persistência e determinismo**: expedições, obras e missões em andamento recuperadas com o mesmo resultado futuro; N dias de uma vez iguais a N avanços de um dia; migração da versão 1.
+- **Campanha de 180 dias**: recursos finitos e não negativos, 6 balanços, obras concluídas, ações sem atraso, relações dentro dos limites e ida e volta pelo salvamento.
+
+`tests/e2e/map.spec.ts` (Playwright) cobre:
+
+- Criação da casa em três etapas, com validação e prévia do brasão.
+- Mapa com 252 províncias, névoa, bordas de reino e de feudo, destaque da sede e das fronteiras exploráveis, ícones de todos os tipos de assentamento, zoom pela roda, arraste e câmera estável enquanto o tempo corre.
+- Ciclo completo do MVP (investir, explorar, revelar, enviar emissário, dar presente, conversar, contratar espião, receber relatório, salvar, recarregar e carregar).
+- Cena da audiência no castelo e guarnição de Pontevela.
+- Modo Conquistar sem ações militares.
+- Celular em paisagem (844×390) com painel compacto recolhível e sem rolagem horizontal.
+- Arte do atlas e barcos animados respeitando o movimento reduzido.
 
 # 29. TESTES OBRIGATÓRIOS
 

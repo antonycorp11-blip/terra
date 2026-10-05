@@ -1,3 +1,4 @@
+import { initializeCampaign } from './campaign'
 import { createCells, createLandmasses, inPolygon } from './geography'
 import { rng } from './random'
 import { FIRST_NAMES, PLACE_PREFIX, PLACE_ROOT, REALMS } from './worldData'
@@ -143,9 +144,11 @@ export function createWorld(seed = WORLD_SEED): World {
       province.liegeHouseId = realms.find(realm => realm.id === province.realmId)!.royalHouseId
     }
   }
-  const player = houses.find(house => house.name === 'Casa Serraval')!
+  const player = houses.find(house => house.id === 'house-prov-1-5')!
   const pontevela = provinces.find(province => province.id === player.seatProvinceId)!
+  const formerName = pontevela.name
   pontevela.name = 'Pontevela'; pontevela.population = 6200; pontevela.loyalty = 78
+  for (const house of houses) house.memory = house.memory.map(entry => entry.replaceAll(formerName, 'Pontevela'))
   function portPosition(province:Province):Point {
     const coast=landPolygons[province.landmass]
     const candidates=[...coast].sort((a,b)=>Math.hypot(a[0]-province.center[0],a[1]-province.center[1])-Math.hypot(b[0]-province.center[0],b[1]-province.center[1]))
@@ -170,4 +173,4 @@ export function createWorld(seed = WORLD_SEED): World {
   return { geographyRevision:3, seed, landPolygon, landPolygons, maritimeLinks:maritimeIndexes.map(([a,b])=>[provinceId(a),provinceId(b)]), seaRoutes:buildSeaRoutes(landPolygons), realms, fiefs, provinces, settlements, houses, rivers, roads, history: [{ id:'history-1', day:0, category:'fundação', description:'A Casa Serraval mantém Pontevela sob juramento à Casa Hadrin, no reino de Velária.', entityIds:[player.id, pontevela.id] }] }
 }
 
-export function createGame(seed = WORLD_SEED): GameState { return { version:1, world:createWorld(seed), day:0, playerHouseId:'house-prov-1-5', speed:0, updatedAt:Date.now() } }
+export function createGame(seed = WORLD_SEED): GameState { return initializeCampaign({ version:1, world:createWorld(seed), day:0, playerHouseId:'house-prov-1-5', speed:0, updatedAt:Date.now() }) }

@@ -10,9 +10,41 @@ A revisão geográfica 3 usa `landPolygons` (continente e 16 ilhas), preservando
 
 `src/ui/mapArt.ts` monta reservas espaciais para nomes e assentamentos. A direção atual é cartografia política, sem decoração de vegetação. `MapSprites` reutiliza apenas construções e barcos do atlas; nomes curvos usam SVG `textPath`, e limites/rios usam `vector-effect` para manter espessuras legíveis no zoom. Cores políticas não são misturadas com biomas. Os dados territoriais e cliques permanecem SVG.
 
-Salvamentos anteriores a `geographyRevision: 3` são regenerados com a nova geografia, preservando calendário, história, recursos das casas e população/lealdade da sede do jogador. A titularidade inicial segue a nova hierarquia. Hidrografia física detalhada, pontes, transporte naval, simulação econômica e IA permanecem para fases posteriores.
+Salvamentos anteriores a `geographyRevision: 3` são regenerados com a nova geografia, preservando calendário, história, recursos das casas e população/lealdade da sede do jogador. A titularidade inicial segue a nova hierarquia. Hidrografia física detalhada, pontes, transporte naval, economia entre casas e IA permanecem para fases posteriores.
 
-A audiência inicial de Pontevela fica em `src/engine/audience.ts`: aplica uma escolha uma única vez, modifica recursos e lealdade em estado imutável e acrescenta um registro histórico persistente. A apresentação da conversa fica em `src/ui/App.tsx`.
+A audiência inicial de Pontevela fica em `src/engine/audience.ts`: aplica uma escolha uma única vez, modifica recursos e lealdade em estado imutável e acrescenta um registro histórico persistente. A apresentação da conversa fica na cena do castelo, em `src/ui/App.tsx`.
+
+## Arquitetura do MVP (Descobrir · Influenciar · Conquistar)
+
+O estado persistente é `GameState` versão 2: `world` (geografia e domínio político) mais `campaign: CampaignData` (`src/engine/mvpTypes.ts`), que contém `customization`, `knowledge`, `expeditions`, `investments`, `ledger`, `characters`, `contacts`, `diplomacy`, `agents`, `spyMissions`, `reports`, `conversations`, `notifications` e o contador `nextId`. As regras ficam em módulos puros do motor:
+
+| Módulo | Responsabilidade |
+|---|---|
+| `balance.ts` | Única fonte dos valores de balanceamento |
+| `stateUtils.ts` | `editGame` (cópia rasa da geometria imutável e clonagem do estado mutável), `spend`, `nextId`, `record` |
+| `campaign.ts` | Cria `CampaignData` para jogos novos e para salvamentos da versão 1 |
+| `heraldry.ts`, `houseCustomization.ts` | Opções de brasão, validação do nome, fundação da casa (só no dia 0) |
+| `knowledge.ts` | Níveis de conhecimento, avistamento de vizinhos, `knownRoute` (BFS só por terra conhecida) |
+| `exploration.ts` | Orçamento, envio e resolução de expedições; achados lidos dos dados reais |
+| `economy.ts`, `investments.ts` | Balanço mensal calculado só a partir de `BALANCE`, obras concluídas e acordos; eventos locais |
+| `characters.ts`, `relationships.ts`, `dialogue.ts` | Personagens determinísticos com IDs persistentes (`ruler-<casa>`, `counsel-<casa>`, `court-n`, `candidate-n`), relação inicial explicada, conversas com intervalos e memória |
+| `diplomacy.ts`, `espionage.ts` | Emissário, presente, aproximação, audiência, comércio; contratação, missões e relatórios |
+| `notifications.ts` | Fila de acontecimentos; `important` marca o que pausa o tempo |
+| `simulation.ts` | `advanceGame` processa um dia por vez, na mesma ordem, de forma determinística |
+
+Invariantes:
+
+- Nenhuma regra procura a casa do jogador pelo nome; usam-se `playerHouseId` e `seatProvinceId`.
+- `advanceGame(g, n)` equivale a n chamadas de `advanceGame(g, 1)`. Os sorteios usam `hash` sobre IDs e dias, nunca `Math.random` nem o relógio do sistema. `updatedAt` só muda no envelope de persistência.
+- Toda ação valida o custo e o pré-requisito com `requireRule` e lança uma mensagem legível, que a interface mostra.
+- `migrateGame` aceita as versões 1 e 2: aplica a migração geográfica e cria `campaign` quando ausente.
+
+### Interface
+
+- `src/ui/store.ts` guarda apenas estado transitório: modo, seleção, aba, painel recolhido e pedidos de foco de câmera.
+- `App.tsx` mantém `gameRef` como fonte única para sequenciar ações do jogador e ticks do relógio sem perder nenhum dos dois.
+- `MapView.tsx` memoriza toda a geometria por `world.seed`, então caminhos, contornos fundidos de reinos e feudos, rótulos e centros nunca são recalculados por avanço de calendário. A camada de províncias é um `memo` que só se redesenha quando muda o conhecimento, o modo ou as relações. A névoa usa uniões de polígonos (`unionPath`, com buracos e `evenodd`) por nível de conhecimento, para que nenhuma fronteira interna vaze. Fronteiras de reino, feudo e província têm espessuras distintas, com `vector-effect: non-scaling-stroke`. O nível de detalhe depende da escala; a roda do mouse usa um ouvinte nativo não passivo; há suporte a pinça.
+- `DiscoverPanel`, `InfluencePanel` e `ConquerPanel` apenas leem o estado e chamam ações do motor por meio de `act`.
 
 # 25. ARQUITETURA DE SOFTWARE
 

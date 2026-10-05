@@ -1,3 +1,4 @@
+import { initializeCampaign, type LegacyGame } from './campaign'
 import type { GameState } from './types'
 import { createWorld } from './world'
 const DB_NAME = 'herdeiros-do-juramento'
@@ -29,10 +30,13 @@ export async function saveGame(slot: string, game: GameState): Promise<void> { a
 export async function loadGame(slot: string): Promise<GameState | null> {
   const entry = await transact<SaveSlot | undefined>('readonly', store => store.get(slot))
   if (!entry) return null
-  if (entry.game.version !== CURRENT_VERSION) throw new Error('Este salvamento requer migração ainda não disponível.')
-  const game = migrateGeography(entry.game)
+  const game = migrateGame(entry.game)
   if (game !== entry.game) await saveGame(slot,game)
   return game
+}
+export function migrateGame(game: LegacyGame): GameState {
+  if (game.version !== 1 && game.version !== 2) throw new Error('Versão de campanha não suportada.')
+  return initializeCampaign(migrateGeography(game as GameState))
 }
 export function migrateGeography(game: GameState): GameState {
   if (game.world.geographyRevision === 3) return game
@@ -41,7 +45,7 @@ export function migrateGeography(game: GameState): GameState {
   for (const house of world.houses) {
     const old = oldHouses.get(house.id)
     if (!old) continue
-    house.gold=old.gold;house.stock={...old.stock};house.mobilizable=old.mobilizable
+    house.name=old.name;house.symbol=old.symbol;house.color=old.color;house.memberIds=[...old.memberIds];house.gold=old.gold;house.stock={...old.stock};house.mobilizable=old.mobilizable
     house.prestige=old.prestige;house.influence=old.influence;house.memory=[...old.memory]
   }
   const oldPlayer=game.world.houses.find(h=>h.id===game.playerHouseId)
