@@ -1,0 +1,3 @@
+export default function MapSprites() {
+  return <>{[['castle',3],['port',4],['ship',5]].map(([kind,index])=><symbol key={kind} id={`art-${kind}`} viewBox="0 0 512 512" overflow="hidden"><image href="/assets/varedor-map-atlas.png" x={-(Number(index)%3)*512} y={-Math.floor(Number(index)/3)*512} width="1536" height="1024"/></symbol>)}<symbol id="art-village" viewBox="0 0 512 512" overflow="hidden"><clipPath id="village-art-clip"><rect width="512" height="340"/></clipPath><image clipPath="url(#village-art-clip)" href="/assets/varedor-map-atlas.png" x="-512" y="-512" width="1536" height="1024"/></symbol></>
+}
