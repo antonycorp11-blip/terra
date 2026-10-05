@@ -3,6 +3,7 @@ import { createGame, createWorld } from './world'
 import { advanceGame } from './simulation'
 import { dateFromDay } from './calendar'
 import { inPolygon, onLand } from './geography'
+import { buildMesh, partitionProvinces } from './mesh'
 import { shortestPath } from './routes'
 import { migrateGeography } from './persistence'
 import { PONTEVELA_AUDIENCE_ID, resolvePontevelaAudience } from './audience'
@@ -10,8 +11,7 @@ import type { GameState, World } from './types'
 
 describe('fundação de Varedor', () => {
   const world = createWorld()
-  const area = (polygon:[number,number][]) => Math.abs(polygon.reduce((sum,point,index) => {const next=polygon[(index+1)%polygon.length];return sum+point[0]*next[1]-next[0]*point[1]},0)/2)
-  it('cria a hierarquia oficial com referências válidas', () => {
+    it('cria a hierarquia oficial com referências válidas', () => {
     expect(world.realms).toHaveLength(7)
     expect(world.fiefs).toHaveLength(42)
     expect(world.provinces).toHaveLength(252)
@@ -46,7 +46,9 @@ describe('fundação de Varedor', () => {
       expect(capital?.type).toBe('cidade')
       expect(capital?.ownerHouseId).toBe(realm.royalHouseId)
     }
-    expect(world.provinces.reduce((sum,province)=>sum+province.polygons.reduce((s,p)=>s+area(p),0),0)/world.landPolygons.reduce((s,p)=>s+area(p),0)).toBeCloseTo(1,3)
+    // Every land cell of the terrain mesh belongs to exactly one province.
+    const mesh = buildMesh(world.seed), label = partitionProvinces(mesh, 252, world.seed)
+    for (let i = 0; i < mesh.points.length; i++) if (mesh.land[i]) expect(label[i]).toBeGreaterThanOrEqual(0)
   })
   it('mantém a malha territorial conectada e as relações de vizinhança recíprocas', () => {
     const byId = new Map(world.provinces.map(province => [province.id, province]))
@@ -70,17 +72,24 @@ describe('fundação de Varedor', () => {
     }
     expect(shortestPath(world.provinces, world.provinces[0].id, world.provinces[200].id, world.roads).length).toBeGreaterThan(1)
     for (const [from,to] of world.roads) expect(byId.get(from)?.neighbors).toContain(to)
+    // Rivers follow the drainage of the terrain: each step goes to the downstream cell, ending at the sea or a confluence.
+    const mesh = buildMesh(world.seed), index = new Map(mesh.points.map((p, i) => [`${p[0]},${p[1]}`, i]))
+    expect(world.rivers.length).toBeGreaterThanOrEqual(8)
     for (const river of world.rivers) {
       expect(river.length).toBeGreaterThanOrEqual(4)
-      const elevations = river.slice(0,-1).map(point => world.provinces.find(province => province.center[0] === point[0] && province.center[1] === point[1])!.elevation)
-      for (let i=1;i<elevations.length;i++) expect(elevations[i]).toBeLessThan(elevations[i-1])
+      for (let i=1;i<river.length;i++) expect(mesh.parent[index.get(`${river[i-1][0]},${river[i-1][1]}`)!]).toBe(index.get(`${river[i][0]},${river[i][1]}`))
     }
   })
   it('possui ilhas tituladas, tamanhos variados e rotas apenas sobre água',()=>{
     expect(world.landPolygons.length).toBeGreaterThan(10)
     expect(onLand([670,480],world.landPolygons)).toBe(false)
-    const areas=world.realms.map(r=>world.provinces.filter(p=>p.realmId===r.id).reduce((s,p)=>s+p.polygons.reduce((s,poly)=>s+area(poly),0),0))
+    const areas=world.realms.map(r=>world.provinces.filter(p=>p.realmId===r.id).reduce((s,p)=>s+p.area,0))
     expect(Math.max(...areas)/Math.min(...areas)).toBeGreaterThan(2)
+    // Provinces are not uniform: sizes spread widely and some follow coasts or valleys as long strips.
+    const sizes=world.provinces.map(p=>p.area).sort((a,b)=>a-b)
+    expect(sizes.at(-1)!/sizes[0]).toBeGreaterThan(15)
+    expect(world.provinces.filter(p=>p.labelAngle!==0).length).toBeGreaterThan(20)
+    expect(new Set(world.provinces.map(p=>p.terrain)).size).toBeGreaterThanOrEqual(5)
     for(const island of world.provinces.filter(p=>p.landmass>0)){
       expect(island.neighbors).toHaveLength(0)
       expect(world.maritimeLinks.some(link=>link.includes(island.id))).toBe(true)
@@ -124,7 +133,7 @@ describe('fundação de Varedor', () => {
     oldWorld.houses=game.world.houses.map(house => ({...house,gold:house.id === game.playerHouseId ? 930 : house.gold}))
     const old={...game,day:37,world:oldWorld as World} as GameState
     const migrated=migrateGeography(old)
-    expect(migrated.world.geographyRevision).toBe(3)
+    expect(migrated.world.geographyRevision).toBe(4)
     expect(migrated.day).toBe(37)
     expect(migrated.world.houses.find(house => house.id === game.playerHouseId)?.gold).toBe(930)
     expect(migrated.world.provinces).toHaveLength(252)

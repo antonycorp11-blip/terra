@@ -8,7 +8,7 @@ import { canExplore, expeditionQuote, sendExpedition } from './exploration'
 import { economicBalance } from './economy'
 import { startInvestment } from './investments'
 import { diplomaticAction, sendEmissary } from './diplomacy'
-import { hireSpy, sendSpy } from './espionage'
+import { hireSpy, sendSpy, spyQuote } from './espionage'
 import { converse, dialogueWait } from './dialogue'
 import { canConverse, rulerOf } from './characters'
 import { migrateGame } from './persistence'
@@ -72,9 +72,13 @@ describe('mapa desconhecido e exploração', () => {
   it('começa com Pontevela conhecida, vizinhas avistadas e o restante encoberto', () => {
     const g = fresh()
     expect(knowledge(g, seat(g).id)).toBe(KNOWLEDGE.indexOf('investigada'))
-    for (const id of seat(g).neighbors) expect(knowledge(g, id)).toBe(1)
+    // The player's own fief is known; its outer borders are sighted; the rest of Varedor is hidden.
+    const fief = g.world.provinces.filter(p => p.fiefId === seat(g).fiefId)
+    for (const p of fief) expect(knowledge(g, p.id)).toBeGreaterThanOrEqual(2)
+    const border = new Set(fief.flatMap(p => p.neighbors).filter(id => !fief.some(f => f.id === id)))
+    for (const id of border) expect(knowledge(g, id)).toBe(1)
     const unknown = g.world.provinces.filter(p => knowledge(g, p.id) === 0)
-    expect(unknown).toHaveLength(252 - 1 - seat(g).neighbors.length)
+    expect(unknown).toHaveLength(252 - fief.length - border.size)
   })
   it('cobra custos, respeita duração, limite e alcance, e revela a província', () => {
     const g = fresh()
@@ -83,7 +87,7 @@ describe('mapa desconhecido e exploração', () => {
     const [a, b, c] = frontier(g)
     const quote = expeditionQuote(g, a.id)
     expect(quote.gold).toBe(60); expect(quote.food).toBe(80)
-    expect(quote.days).toBe(BALANCE.expedition.days + BALANCE.terrainDays[a.terrain])
+    expect(quote.days).toBe(BALANCE.expedition.days + Math.max(0, quote.route.length - 2) * 2 + BALANCE.terrainDays[a.terrain])
     let s = sendExpedition(g, a.id)
     expect(player(s).gold).toBe(640); expect(player(s).stock.food).toBe(1160)
     s = sendExpedition(s, b.id)
@@ -129,7 +133,7 @@ describe('economia e investimentos', () => {
     expect(b.foodProduction).toBe(300); expect(b.iron).toBe(45)
     expect(g.world.history.some(r => r.description.includes('Investimento concluído'))).toBe(true)
     const broke = structuredClone(base); broke.world.houses.find(h => h.id === broke.playerHouseId)!.gold = 10
-    expect(() => startInvestment(broke, 'farms')).toThrow('Recursos insuficientes.')
+    expect(() => startInvestment(broke, 'farms')).toThrow('Faltam')
   })
 })
 
@@ -146,7 +150,7 @@ describe('diplomacia', () => {
   })
   it('vizinhos têm personalidades diferentes', () => {
     const g = fresh()
-    const houses = [...new Set(seat(g).neighbors.map(id => g.world.provinces.find(p => p.id === id)!.governingHouseId))]
+    const houses = [...new Set(g.world.provinces.filter(p => p.fiefId === seat(g).fiefId).map(p => p.governingHouseId))].filter(id => id !== g.playerHouseId)
     const rulers = houses.map(id => rulerOf(g, id))
     expect(new Set(rulers.map(r => r.traits.join('/'))).size).toBeGreaterThan(1)
     expect(new Set(rulers.map(r => r.name)).size).toBe(rulers.length)
@@ -184,7 +188,7 @@ describe('espionagem', () => {
     let g = fresh()
     const explored = exploreOne(exploreOne(g).game, 0)
     g = hireSpy(explored.game, 'agent-0')
-    const targets = g.world.provinces.filter(p => knowledge(g, p.id) === 2)
+    const targets = g.world.provinces.filter(p => knowledge(g, p.id) === 2 && spyQuote(g, p.id).route.length > 0)
     expect(() => sendSpy(g, 'agent-0', g.world.provinces.find(p => knowledge(g, p.id) === 0)!.id)).toThrow()
     const outcomes = new Set<string>()
     // Repeat missions deterministically until both success-like and failure-like outcomes appear.
@@ -255,7 +259,7 @@ describe('persistência e determinismo', () => {
     const legacy = JSON.parse(JSON.stringify({ ...base, version:1 })) as Record<string, unknown>
     delete legacy.campaign
     const migrated = migrateGame(legacy as never)
-    expect(migrated.version).toBe(2)
+    expect(migrated.version).toBe(3)
     expect(migrated.campaign.customization.name).toBe('Serraval')
     expect(knowledge(migrated, seat(migrated).id)).toBe(3)
   })
