@@ -69,7 +69,7 @@ export default function HouseCreation({ base, onFound, onCancel }: { base: GameS
               <div><dt>População</dt><dd>{fmt(seat.population)}</dd></div><div><dt>Lealdade</dt><dd>{seat.loyalty}%</dd></div>
             </dl>
             <h2>Recursos iniciais</h2>
-            <dl className={styles.resources}><div><dt>Ouro</dt><dd>{fmt(house.gold)}</dd></div><div><dt>Alimentos</dt><dd>{fmt(house.stock.food)}</dd></div><div><dt>Madeira</dt><dd>{fmt(house.stock.wood)}</dd></div><div><dt>Ferro</dt><dd>{fmt(house.stock.iron)}</dd></div><div><dt>Cavalos</dt><dd>{fmt(house.stock.horses)}</dd></div></dl>
+            <dl className={styles.resources}><div><dt>Ouro</dt><dd>{fmt(house.gold)}</dd></div><div><dt>Grãos</dt><dd>{fmt(house.stock.food)}</dd></div><div><dt>Madeira</dt><dd>{fmt(house.stock.wood)}</dd></div><div><dt>Ferro</dt><dd>{fmt(house.stock.iron)}</dd></div><div><dt>Sal</dt><dd>{fmt(house.stock.salt)}</dd></div><div><dt>Pedra</dt><dd>{fmt(house.stock.stone)}</dd></div></dl>
           </>}
         </div>
       </div>

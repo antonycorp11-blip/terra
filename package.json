@@ -10,7 +10,10 @@
     "test:ui": "playwright test"
   },
   "dependencies": {
+    "@fontsource/alegreya": "^5.3.0",
+    "@fontsource/alegreya-sans-sc": "^5.3.0",
     "@fontsource/cinzel": "^5.3.0",
+    "@fontsource/im-fell-english-sc": "^5.3.0",
     "@fontsource/inter": "^5.3.0",
     "d3-delaunay": "^6.0.4",
     "polygon-clipping": "^0.15.7",

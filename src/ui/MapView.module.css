@@ -1,26 +1,55 @@
-.mapShell{position:absolute;inset:0;overflow:hidden;background:#0b3e58}
-.map{width:100%;height:100%;display:block;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}.map:active{cursor:grabbing}
-.province{cursor:pointer;transition:fill .45s ease,filter .16s}.province:hover{filter:brightness(1.16) saturate(1.1);stroke:#fff0aa;stroke-opacity:1;stroke-width:1.6}
-.fog{transition:opacity .4s}
-.reveal{pointer-events:none}
-.revealFog{animation:revealFog 2.2s ease-out forwards}
-.revealGlow{animation:revealGlow 2.6s ease-out forwards}
-@keyframes revealFog{0%{opacity:1}100%{opacity:0}}
-@keyframes revealGlow{0%{opacity:0;stroke-width:10px}25%{opacity:1}100%{opacity:0;stroke-width:2px}}
-.explorable{animation:march 1.6s linear infinite}
-@keyframes march{to{stroke-dashoffset:-24}}
-.selectedOutline{animation:breathe 2.4s ease-in-out infinite}
-@keyframes breathe{50%{stroke-opacity:.55}}
-.walker{transition:transform .3s linear}
-.settlement{cursor:pointer}.settlement:hover use{filter:brightness(1.2) drop-shadow(0 0 2px #fff3c4)}
-.settlementName,.provinceName,.fiefName,.realmName{font-family:Cinzel,Georgia,serif;text-anchor:middle;paint-order:stroke;stroke-linejoin:round;pointer-events:none}
-.settlementName{fill:#fff3d9;stroke:#10242a;stroke-width:.25em;font-weight:600}
-.provinceName{fill:#fff4dc;stroke:#13262c;stroke-width:.28em;font-weight:600;letter-spacing:.02em}
-.seatName{fill:#ffe39a}
-.fiefName{fill:#f6e0b0;stroke:#1a1d18;stroke-width:.3em;font-weight:500;letter-spacing:.12em;font-style:normal;opacity:.92}
-.realmName{fill:#253038;stroke:#f4e1b5;stroke-width:.12em;font-weight:500;letter-spacing:.14em}
-.controls{position:absolute;z-index:4;left:16px;bottom:150px;display:flex;flex-direction:column;gap:3px}.controls button{width:36px;height:34px;background:#0b2639e0;border:1px solid #d3a05a;color:#fce1a9;font-size:19px;box-shadow:0 2px 8px #001a26a8;display:grid;place-items:center}.controls button:hover{background:#31617b}
-.minimap{position:absolute;z-index:4;left:16px;bottom:16px;width:200px;height:120px;padding:5px;background:#0a2332e8;border:1px solid #b98c52;box-shadow:inset 0 0 0 2px #213b46,0 5px 18px #0009}.minimap>div{font:600 9px Cinzel,Georgia,serif;letter-spacing:.12em;color:#f5dba8;text-align:center;margin-bottom:3px}.minimap svg{display:block;width:100%;height:92px;cursor:crosshair;border:1px solid #557182}.minimap svg:hover{border-color:#ffe0a5}
-.ship{animation:shipBob 3.8s ease-in-out infinite;transform-box:fill-box;transform-origin:center}@keyframes shipBob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-1.3px) rotate(2deg)}}
-@media(prefers-reduced-motion:reduce){.ship,.explorable,.selectedOutline{animation:none}.revealFog,.revealGlow{animation-duration:.01s}}
-@media(max-width:760px),(max-height:520px){.minimap{left:8px;bottom:8px;width:118px;height:74px;padding:3px}.minimap>div{display:none}.minimap svg{height:66px}.controls{left:8px;bottom:88px}.controls button{width:32px;height:30px;font-size:17px}}
+.map{position:absolute;inset:0;overflow:hidden;background:radial-gradient(ellipse at 50% 40%,#22566a 0,#123545 55%,#0a1f2a 100%);touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.dragging{cursor:grabbing}
+.world{position:absolute;left:0;top:0;width:1100px;height:720px;transform-origin:0 0;will-change:transform}
+.terrain{position:absolute;inset:0;width:1100px;height:720px}
+.svg{position:absolute;inset:0;overflow:visible}
+.hits path{fill:transparent;stroke:transparent;cursor:pointer;transition:fill .15s}
+.hits path:hover{fill:rgba(255,240,205,.1);stroke:rgba(255,236,190,.7);stroke-width:calc(1.2px * var(--inv) * 1.8)}
+.selected{fill:rgba(255,232,170,.12);stroke:#ffe6a3;stroke-width:calc(2.2px * var(--inv) * 1.6);animation:pulse 2.2s ease-in-out infinite}
+@keyframes pulse{50%{stroke-opacity:.45}}
+.mineOutline{fill:none;stroke:#f1cf73;stroke-width:calc(1.6px * var(--inv) * 1.5);pointer-events:none}
+.bHidden{fill:none;stroke:#6b7a83;stroke-opacity:.32;stroke-width:.35}
+.bProvince{fill:none;stroke:#22180b;stroke-opacity:.55;stroke-width:.55;stroke-linejoin:round}
+.bMerged{fill:none;stroke:#fff3cf;stroke-opacity:.16;stroke-width:.4;stroke-dasharray:1 2}
+.bFiefShadow{fill:none;stroke:#140d06;stroke-opacity:.7;stroke-width:1.7;stroke-linejoin:round}
+.bFief{fill:none;stroke:#f2e2b6;stroke-opacity:.75;stroke-width:.55}
+.bRealmShadow{fill:none;stroke:#0d0805;stroke-opacity:.55;stroke-width:3.2;stroke-linejoin:round}
+.bRealm{fill:none;stroke:#e8c25f;stroke-width:1.1;stroke-dasharray:4 2}
+.lens{opacity:0;transition:opacity .35s;pointer-events:none}
+.lens[data-on="true"]{opacity:1}
+.labels{pointer-events:none}
+.realmName{font-family:'IM Fell English SC',Georgia,serif;font-size:calc(30px * var(--lk));letter-spacing:.5em;fill:#f6ebcd;fill-opacity:.2;text-anchor:middle;transition:opacity .3s}
+.fiefName{font-family:'IM Fell English SC',Georgia,serif;font-size:calc(15px * var(--lk));letter-spacing:.3em;fill:#22170a;fill-opacity:.55;text-anchor:middle}
+.provName{font-family:'Alegreya Sans SC',sans-serif;font-weight:700;font-size:calc(var(--fs) * var(--lk) * 1.3);letter-spacing:.12em;fill:#22170a;stroke:rgba(246,236,205,.78);stroke-width:calc(2.4px * var(--lk));paint-order:stroke;text-anchor:middle;dominant-baseline:central}
+.mineName{fill:#3a2605;stroke:rgba(255,240,195,.95)}
+.map[data-zoom="far"] .provName{opacity:0}
+.map[data-zoom="far"] .mineName{opacity:1}
+.map[data-zoom="near"] .realmName{opacity:.35}
+.counter{transform:scale(var(--lk))}
+.pill{fill:#151d1e;fill-opacity:.92;stroke:rgba(255,255,255,.22);stroke-width:.6}
+.pillMine{fill:#3b2a08;stroke:#f1cf73;stroke-width:.8}
+.pillText{font-family:'Alegreya Sans SC',sans-serif;font-weight:700;font-size:7.5px;fill:#f4e8c8;text-anchor:middle;dominant-baseline:central}
+.route{fill:none;stroke:#e0b44a;stroke-width:1.4;stroke-dasharray:4 3;animation:dash 1.2s linear infinite}
+.routeShadow{fill:none;stroke:#0b0d0e;stroke-width:3;stroke-opacity:.55}
+@keyframes dash{to{stroke-dashoffset:-14}}
+.marchMine{fill:none;stroke:#f1cf73;stroke-width:1.4;stroke-dasharray:1.5 3;stroke-linecap:round}
+.marchFoe{fill:none;stroke:#ff6a52;stroke-width:1.8;stroke-dasharray:1.5 3;stroke-linecap:round}
+.tokens{position:absolute;inset:0;pointer-events:none}
+/* Lords stand on their castles, full body; screen size stays readable at any zoom. */
+.lord{position:absolute;padding:0;border:0;background:none;pointer-events:auto;cursor:pointer;transform:translate(-50%,-92%) scale(var(--inv));transform-origin:50% 92%;display:flex;flex-direction:column;align-items:center;transition:filter .2s}
+.lord img{display:block;height:64px;width:auto;filter:drop-shadow(0 3px 3px rgba(0,0,0,.55));transition:height .25s}
+.map[data-zoom="far"] .lord img{height:38px}
+.map[data-zoom="near"] .lord img{height:92px}
+.lord .base{width:26px;height:8px;margin-top:-5px;border-radius:50%;background:radial-gradient(ellipse,var(--hc) 0,transparent 70%);opacity:.9}
+.lord:hover img{filter:drop-shadow(0 0 6px rgba(255,230,160,.8)) drop-shadow(0 3px 3px rgba(0,0,0,.55))}
+.active img{height:110px!important;filter:drop-shadow(0 0 10px rgba(255,220,130,.95)) drop-shadow(0 4px 4px rgba(0,0,0,.6))}
+.active{z-index:5}
+.me img{filter:drop-shadow(0 0 4px rgba(241,207,115,.85)) drop-shadow(0 3px 3px rgba(0,0,0,.55))}
+.crestOnly{display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
+.traveling{opacity:.95}
+.traveling img{height:52px}
+.tag{font-family:'Alegreya Sans SC',sans-serif;font-weight:700;font-size:10px;letter-spacing:.05em;color:#ffe3a0;background:#3b2a08;padding:1px 6px;border-radius:3px;white-space:nowrap}
+.army{position:absolute;transform:translate(-50%,-50%) scale(var(--inv));display:flex;align-items:center;gap:3px;padding:2px 6px 2px 3px;border-radius:12px;font:700 11px 'Alegreya Sans SC',sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.armyMine{background:#2b2208;color:#ffe3a0;border:1px solid #f1cf73}
+.armyFoe{background:#4a130d;color:#ffd5c9;border:1px solid #ff6a52;animation:pulse 1.4s infinite}
+@media (prefers-reduced-motion:reduce){.selected,.route,.armyFoe{animation:none}}
