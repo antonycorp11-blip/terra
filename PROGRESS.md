@@ -10,6 +10,7 @@ O jogador achou o jogo sem graça: "só um mapa e algumas coisas". Diagnóstico:
 - **Irian e a comitiva no mapa**: marcadores de alcance, viagem em vários turnos, descoberta da terra, contato ao chegar, troca de homens com a guarnição, comitiva que cresce com as terras.
 - **Conversa só em pessoa**; banquete, patrocínio, presente, propostas e juramento sem custo de ordem quando Irian está com o lorde.
 - **Lordes que andam** com escoltas (caçam bandos, visitam o suserano, vão à guerra) e **bandos de salteadores** que saqueiam, fogem e crescem; casas pagam recompensa.
+- **Justa nos torneios**: minijogo de tempo em três investidas.
 - **Cerco com a comitiva**: Irian cerca castelos onde está; os sobreviventes voltam para ele.
 - **Combate em campo** com tática, **captura de lordes** e decisão sobre o prisioneiro (juramento, resgate, libertar, manter).
 - **Visual de atlas iluminado**: fronteiras suaves, terra desconhecida em pergaminho, cores em aquarela, interface de pergaminho e tinta com selo de cera para encerrar o turno, cenas em tons de salão, novas telas de título e de criação da casa.
@@ -18,7 +19,7 @@ O jogador achou o jogo sem graça: "só um mapa e algumas coisas". Diagnóstico:
 
 ### Validação em 06/10/2026
 
-- `npm test`: 58 testes (inclui `party.test.ts`).
+- `npm test`: 59 testes (inclui `party.test.ts`).
 - `npm run test:ui`: 10 fluxos Playwright.
 - `npm run build`: sem erros.
 

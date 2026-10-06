@@ -9,6 +9,7 @@ import { levyCap } from './military'
 import { liegeHouse } from './politics'
 import { rulerOf } from './characters'
 import { migrateGame } from './persistence'
+import { resolveJoust } from './events'
 import type { GameState } from './types'
 
 const base = createGame()
@@ -102,5 +103,15 @@ describe('conquista mais dura', () => {
     expect(migrated.campaign.wars).toEqual([])
     expect(migrated.day).toBe(5)
     expect(migrated.campaign.notifications.length).toBe((g.campaign.notifications as unknown[]).length)
+  })
+  it('no torneio, Irian pode justar: dois golpes limpos vencem', () => {
+    const g = fresh(), host = house(g, 'Casa Vasterre')
+    g.campaign.decisions.push({ id: 'd-j', kind: 'evento', day: 0, provinceId: host.seatProvinceId, houseId: host.id, resolved: false, event: { key: 'torneio', title: 't', text: 't', data: { house: host.id }, choices: [{ id: 'lutar', label: 'l', detail: 'd' }] } })
+    const gold = player(g).gold, renown = player(g).prestige
+    const won = resolveJoust(g, 'd-j', 3)
+    expect(player(won).gold).toBe(gold + 100); expect(player(won).prestige).toBe(renown + 12)
+    expect(won.campaign.decisions.find(d => d.id === 'd-j')!.resolved).toBe(true)
+    expect(player(resolveJoust(g, 'd-j', 0)).prestige).toBe(renown - 3)
+    expect(() => resolveJoust(won, 'd-j', 2)).toThrow()
   })
 })

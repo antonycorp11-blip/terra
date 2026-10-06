@@ -40,3 +40,13 @@
 .reach span{font:700 13px 'Alegreya Sans SC',sans-serif;color:#ffe3a0}
 @keyframes beckon{0%{transform:scale(.85);opacity:.9}100%{transform:scale(1.35);opacity:0}}
 @media (prefers-reduced-motion:reduce){.band,.reach::after{animation:none}}
+
+/* Atlas skin for map pieces: parchment tags, wax-red rings. */
+.men{background:linear-gradient(180deg,#f4ead1,#e2d2ab);color:#2a2012;border:1px solid #8a6a2a}
+.menMine{border-color:#8e1f17;color:#8e1f17}
+.reach{background:linear-gradient(180deg,#f4ead1,#e2d2ab);border:2px solid #8e1f17}
+.reach span{color:#8e1f17}
+.reach::after{border-color:rgba(142,31,23,.5)}
+.banner .flag{background:linear-gradient(180deg,#f4ead1,#e2d2ab);box-shadow:0 0 0 1px #8a6a2a}
+.army{font-family:'Alegreya Sans SC',sans-serif}
+.armyMine{background:linear-gradient(180deg,#f4ead1,#e2d2ab);color:#2a2012;border-color:#8a6a2a}

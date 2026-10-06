@@ -1,7 +1,7 @@
 import type { GameState, House, Id, Province } from './types'
 import type { Decision, WorldEvent } from './mvpTypes'
 import { BALANCE } from './balance'
-import { clamp, controlled, isVassal, nextId, pay, playerHouse, playerSeat, record } from './stateUtils'
+import { clamp, controlled, editGame, isVassal, nextId, pay, playerHouse, playerSeat, record, requireRule } from './stateUtils'
 import { notify } from './notifications'
 import { hash } from './random'
 import { knowledge, reveal } from './knowledge'
@@ -85,6 +85,7 @@ function candidates(g: GameState): Candidate[] {
     ] } })
     const host = pick(rivals, 'tourney')
     out.push({ weight: 2, provinceId: host.seatProvinceId, houseId: host.id, event: { key: 'torneio', title: `Torneio da ${host.name}`, text: `${rulerOf(g, host.id).name} convida as casas para um torneio. Um campeão seu pode trazer glória ou vergonha.`, data: { house: host.id }, choices: [
+      { id: 'lutar', label: 'Justar pessoalmente', detail: 'Irian entra na liça: três investidas, acerte o escudo na hora certa. Vencendo, prêmio de 100 ouro, renome +12 e relação +8.' },
       { id: 'enviar', label: 'Enviar um campeão', detail: 'Pagar 80 de ouro. Relação +6 e renome +4; vencendo, mais 8 de renome.', cost: '80 ouro' },
       { id: 'recusar', label: 'Agradecer e recusar', detail: 'Relação −3.' },
     ] } })
@@ -163,6 +164,7 @@ export function resolveEvent(g: GameState, d: Decision, choice: string) {
       const won = roll(g, 'joust') % 100 < 40; if (won) h.prestige += 8
       result = won ? 'Seu campeão venceu a justa! Renome +12 no total.' : 'Seu campeão caiu na terceira justa, mas lutou bem. Renome +4.'; break
     }
+    case 'torneio:lutar': result = joustOutcome(g, other!, Number(ev.data.hits ?? 1)); rel(4); break
     case 'torneio:recusar': rel(-3); result = 'A ausência foi notada.'; break
     case 'emprestimo:emprestar': pay(g, { gold: 150 }); other!.gold += 150; rel(12); inf(10); g.campaign.eventLog[`loan:${hid}`] = g.day + 90; result = `150 de ouro emprestados à ${other!.name}. Devem 200 em 90 dias.`; break
     case 'emprestimo:recusar': rel(-6); result = 'O mensageiro parte ofendido.'; break
@@ -184,6 +186,23 @@ export function resolveEvent(g: GameState, d: Decision, choice: string) {
   notify(g, ev.title, result, d.provinceId)
 }
 
+/** The tourney's result for Irian's own lance: two clean hits out of three win it. */
+function joustOutcome(g: GameState, host: House, hits: number): string {
+  const h = playerHouse(g), c = contact(g, host.id)
+  if (hits >= 2) { h.gold += 100; h.prestige += 12; if (c) c.relation = clamp(c.relation + 4); return `Irian venceu o torneio da ${host.name} com ${hits} golpes limpos! Prêmio de 100 ouro e renome +12.` }
+  if (hits === 1) { h.prestige += 3; return 'Irian quebrou uma lança e caiu na última investida. Lutou com honra: renome +3.' }
+  h.prestige = Math.max(0, h.prestige - 3); return 'Irian foi derrubado na primeira investida diante de todas as casas. Renome −3.'
+}
+/** Resolves a tourney Irian jousted himself; `hits` is how many passes struck true (0–3). */
+export function resolveJoust(game: GameState, decisionId: Id, hits: number): GameState {
+  const d = game.campaign.decisions.find(x => x.id === decisionId)
+  requireRule(d && !d.resolved && d.event?.key === 'torneio', 'Não há torneio esperando por Irian.')
+  const g = editGame(game), dec = g.campaign.decisions.find(x => x.id === decisionId)!
+  dec.event!.data.hits = Math.max(0, Math.min(3, Math.round(hits)))
+  dec.resolved = true
+  resolveEvent(g, dec, 'lutar')
+  return g
+}
 function crushRevolt(g: GameState, houseId: Id, rebels: number): string {
   const rebel = house(g, houseId), seat = prov(g, rebel.seatProvinceId), garrison = g.campaign.garrisons[seat.id] ?? 0
   const r = resolveBattle(`${g.world.seed}:revolta:${houseId}:${g.day}`, rebels, garrison, 1, 'assalto', false, seat.terrain)

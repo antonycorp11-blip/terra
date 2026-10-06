@@ -1,7 +1,8 @@
-import { useEffect, useState, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type ReactElement } from 'react'
 import type { GameState } from '../../engine/types'
 import type { Decision } from '../../engine/mvpTypes'
 import { choicesFor, resolveDecision } from '../../engine/decisions'
+import { resolveJoust } from '../../engine/events'
 import { defenders, wallLevel } from '../../engine/military'
 import { fieldQuote } from '../../engine/party'
 import { BALANCE } from '../../engine/balance'
@@ -100,7 +101,10 @@ export function DecisionScene({ game, decision, act }: { game: GameState; decisi
   const house = decision.houseId ? houseOf(game, decision.houseId) : null
   const ruler = house ? game.campaign.characters.find(c => c.id === `ruler-${house.id}`) : null
   const player = houseOf(game, game.playerHouseId)
-  const choose = (id: string) => act(g => resolveDecision(g, decision.id, id))
+  const [joust, setJoust] = useState(false)
+  // Jousting in person is played, not chosen: the lance is timed by the player.
+  const choose = (id: string) => decision.event?.key === 'torneio' && id === 'lutar' ? setJoust(true) : act(g => resolveDecision(g, decision.id, id))
+  if (joust && house) return <JoustScene game={game} hostId={house.id} onDone={hits => act(g => resolveJoust(g, decision.id, hits))}/>
   let art: ReactElement | null = null, title = '', text = ''
   if (decision.kind === 'combate') {
     const q = fieldQuote(game, decision), p = provinceOf(game, decision.provinceId!), irian = game.campaign.characters.find(c => c.id === `ruler-${player.id}`)!
@@ -169,6 +173,64 @@ export function IntroScene({ game, onStart }: { game: GameState; onStart: () => 
         <p className={styles.goalLine}>Objetivo: fazer quatro casas de Três Pontes jurarem a você e virar grão-lorde.</p>
         <button className={styles.btn} onClick={onStart}>Pegar a espada</button>
       </div>
+    </section>
+  </div>
+}
+
+/**
+ * The joust: three passes. The lance (a needle) sweeps across the lists while the horses close in;
+ * tap when it crosses the gold mark on the shield. Each pass is faster and the mark smaller.
+ */
+const PASSES = [{ ms: 1700, zone: 20, at: 62 }, { ms: 1400, zone: 15, at: 70 }, { ms: 1150, zone: 11, at: 58 }]
+function JoustScene({ game, hostId, onDone }: { game: GameState; hostId: string; onDone: (hits: number) => void }) {
+  const host = houseOf(game, hostId), rival = game.campaign.characters.find(c => c.id === `ruler-${hostId}`)!, irian = game.campaign.characters.find(c => c.id === `ruler-${game.playerHouseId}`)!
+  const [pass, setPass] = useState(0), [results, setResults] = useState<('cheio' | 'raspão' | 'errou')[]>([]), [x, setX] = useState(0), [locked, setLocked] = useState<number | null>(null)
+  const start = useRef(0), raf = useRef(0)
+  const P = PASSES[Math.min(pass, 2)], done = results.length >= 3
+  useEffect(() => {
+    if (done) return
+    setLocked(null); setX(0); start.current = performance.now(); sfx.drums()
+    const tick = (t: number) => {
+      const f = Math.min(1, (t - start.current) / P.ms); setX(f * 100)
+      if (f < 1) raf.current = requestAnimationFrame(tick)
+      else { setResults(r => r.length > pass ? r : [...r, 'errou']); setLocked(100) }
+    }
+    raf.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf.current)
+  }, [pass]) // eslint-disable-line react-hooks/exhaustive-deps
+  const strike = () => {
+    if (locked !== null || done) return
+    cancelAnimationFrame(raf.current)
+    const d = Math.abs(x - P.at), r = d <= P.zone * .22 ? 'cheio' : d <= P.zone / 2 ? 'raspão' : 'errou'
+    setLocked(x); setResults(rs => [...rs, r]); if (r !== 'errou') sfx.clash()
+  }
+  const next = () => { if (results.length < 3) setPass(results.length) }
+  const hits = results.filter(r => r === 'cheio').length + Math.floor(results.filter(r => r === 'raspão').length / 2)
+  const last = results[pass]
+  const knightX = (locked ?? x) * .34
+  return <div className={styles.backdrop} data-ui>
+    <section className={`${styles.sheet} ${styles.wide} ${styles.joust}`} role="dialog" aria-label={`Torneio da ${host.name}`}>
+      <header className={styles.battleHead}>
+        <div><Crest heraldry={heraldryOf(game, houseOf(game, game.playerHouseId))} size={30}/><b>Irian</b></div>
+        <div className={styles.battleTitle}><h3>Torneio da {host.name}</h3><span>investida {Math.min(pass + 1, 3)} de 3</span></div>
+        <div><b>{rival.name}</b><Crest heraldry={heraldryOf(game, host)} size={30}/></div>
+      </header>
+      <div className={styles.lists} onPointerDown={strike}>
+        <div className={styles.tilt}/>
+        {irian.portraitAsset && <img className={styles.knight} style={{ left: `${2 + knightX}%` }} src={cardUrl(irian.portraitAsset)} alt="Irian"/>}
+        {rival.portraitAsset && <img className={`${styles.knight} ${styles.rival}`} style={{ right: `${2 + knightX}%` }} src={cardUrl(rival.portraitAsset)} alt={rival.name}/>}
+        {last && last !== 'errou' && <span className={styles.impact}>{last === 'cheio' ? 'Em cheio!' : 'De raspão'}</span>}
+        {last === 'errou' && <span className={`${styles.impact} ${styles.miss}`}>Errou!</span>}
+      </div>
+      <div className={styles.aim}>
+        <div className={styles.aimBar}><i className={styles.zone} style={{ left: `${P.at - P.zone / 2}%`, width: `${P.zone}%` }}/><i className={styles.core} style={{ left: `${P.at - P.zone * .11}%`, width: `${P.zone * .22}%` }}/><b className={styles.needle} style={{ left: `${locked ?? x}%` }}/></div>
+        <div className={styles.passes}>{[0, 1, 2].map(i => <span key={i} data-r={results[i] ?? ''}>{results[i] ?? '·'}</span>)}</div>
+      </div>
+      <footer className={styles.joustFoot}>
+        {done ? <><p>{hits >= 2 ? 'Você venceu o torneio!' : hits === 1 ? 'Lutou com honra, mas caiu.' : 'Derrubado diante de todos.'}</p><button className={styles.btn} onClick={() => onDone(hits)}>Continuar</button></>
+          : locked === null ? <button className={styles.strike} onPointerDown={e => { e.stopPropagation(); strike() }}>Golpear!</button>
+          : <button className={styles.btn} onClick={next}>Próxima investida</button>}
+      </footer>
     </section>
   </div>
 }
