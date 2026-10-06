@@ -18,16 +18,15 @@ export default function PartyCard({ game, act, onClose }: { game: GameState; act
   const here = game.campaign.parties.filter(x => x.id !== party.id && x.provinceId === p.id)
   const seatLord = game.world.houses.find(h => h.seatProvinceId === p.id && h.id !== me.id && !game.campaign.parties.some(x => x.houseId === h.id) && !game.campaign.prisoners.some(x => x.houseId === h.id) && p.governingHouseId === h.id)
   const reach = partyReach(game).size
-  return <aside className={`${styles.card} ${styles.withFigure}`} data-ui aria-label="Comitiva de Irian">
+  // A side panel on the left: the map (and its gold markers) stays free on the right.
+  return <aside className={`${styles.card} ${styles.partyPanel}`} data-ui aria-label="Comitiva de Irian">
     <button className={styles.cx} onClick={onClose} aria-label="Fechar"><Icon name="close" size={16}/></button>
-    <div className={styles.cardFigure} style={{ ['--hc' as string]: mapColor(game, me.id) }}>
-      {irian.portraitAsset && <img src={cardUrl(irian.portraitAsset)} alt="Irian"/>}
-      <span className={styles.figureName}><b>Irian</b>em {p.name}</span>
-    </div>
     <div className={styles.cardBody}>
+      <div className={styles.partyHead}>{irian.portraitAsset && <img src={cardUrl(irian.portraitAsset)} alt="Irian" style={{ ['--hc' as string]: mapColor(game, me.id) }}/>}<div>
       <div className={styles.k}>comitiva · {p.name}</div>
       <h4>{party.men} homens</h4>
-      <div className={styles.meterRow}><span>tamanho</span><span className={styles.meter}><i style={{ width: `${Math.min(100, party.men / cap * 100)}%` }}/></span><b>{cap}</b></div>
+      <div className={styles.meterRow}><span>de</span><span className={styles.meter}><i style={{ width: `${Math.min(100, party.men / cap * 100)}%` }}/></span><b>{cap}</b></div>
+      </div></div>
       <p className={styles.small}>{party.moves > 0 ? `${party.moves} movimento${party.moves > 1 ? 's' : ''} neste turno. ${reach ? 'Toque num marcador dourado para levar a comitiva.' : 'Nenhuma terra conhecida ao alcance.'}` : 'A comitiva já andou neste turno. Encerre o turno para seguir viagem.'} Cada província sua permite liderar mais 30 homens.</p>
 
       {(here.length > 0 || seatLord) && <section className={styles.cardSection}><span className={styles.cardH}>aqui em {p.name}</span>

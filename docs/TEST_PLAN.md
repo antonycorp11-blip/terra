@@ -18,9 +18,12 @@ A bateria valida a geografia realista, o ciclo jogável do MVP (`docs/MVP_SCOPE.
 
 `src/engine/depth.test.ts` (Vitest): acontecimentos a cada poucos dias com consequência (8+ em 120 dias); guerra de Ardesh contra Hadrin no dia 40 e sucessão do grão-lorde; crescimento mensal da população com fatores; imposto alto rende mais e custa lealdade; governador; obras em níveis com custo crescente e quartel aumentando o recrutamento; desgaste do cerco e socorro do suserano; migração da revisão 2.
 
+`src/engine/party.test.ts` (Vitest): comitiva inicial e escoltas do reino; alcance de 2 movimentos e revelação; viagem em vários turnos; `endTurn` (7 dias, ordens, movimentos, bloqueio com decisão aberta); ordens esgotadas; troca de homens com a guarnição; conversa só em pessoa; combate com bando, saque e recompensa; derrota e volta para casa; saque de terra mal guardada; captura de lorde e juramento do prisioneiro; movimento determinístico de lordes e bandos.
+
 `tests/e2e/map.spec.ts` (Playwright):
 
-- Criação da casa em três etapas.
+- Criação da casa em três etapas e cena de abertura.
+- Comitiva: tocar em Irian mostra os marcadores, mover gasta movimentos, encerrar o turno renova.
 - Lordes de corpo inteiro no mapa; carta da casa com figura; as quatro visões mudam o mapa e a carta; filtro de recurso; zoom sem recentralizar.
 - Conquista militar completa na interface, respondendo acontecimentos e cartas pelo caminho: marcha, cerco, tática, batalha animada, rendição, o lorde vencido sai do mapa, o estandarte do jogador aparece e a terra nova aceita imposto.
 - Conversa com o duário mostrando a segunda consciência, o intervalo de repetição e o assunto "Do que precisam".

@@ -4,11 +4,24 @@ Este documento descreve **apenas o que está implementado e jogável agora**. A 
 
 > Um mundo vivo. Três caminhos para conquistar. Uma interface simples.
 
+## Como se joga: turnos e comitiva (`turns.ts`, `party.ts`)
+
+- O jogo é **por turnos**. Cada turno é uma semana. O jogador age e depois toca em **Encerrar turno**: o mundo anda 7 dias (economia, exércitos, diplomacia, acontecimentos), lordes e bandos se movem com animação, e aparecem as cenas e o **relatório do turno**.
+- **Irian é uma peça no mapa** com a sua comitiva (começa com 45 homens). Tocar nele mostra marcadores dourados nas províncias ao alcance: **2 movimentos por turno**, montanha custa 2. Para destinos longe, "Seguir para cá" avança o máximo possível no caminho. Andar descobre a terra (vira explorada) e, ao chegar onde um lorde está, abre contato.
+- **Tamanho da comitiva**: 60 + 30 por província sua. Numa província sua, homens passam da guarnição para a comitiva e vice-versa (lotes de 25).
+- **Ordens**: 3 por turno, para ações à distância (batedores, emissário, obras, muralhas, deslocar tropas, marchar, espião, compras). O que Irian faz **em pessoa** não gasta ordem: conversar (só em pessoa), banquete, patrocínio, presente, proposta de negociação e juramento ficam de graça quando ele está com o lorde.
+- **Lordes na estrada**: os lordes do reino saem com escoltas (20% dos homens + 25), caçam bandos nas próprias terras, visitam o suserano, vão à guerra e voltam para casa. A figura deles anda pelo mapa.
+- **Bandos de salteadores** surgem perto das suas terras (no máximo 2 + 1 a cada 8 turnos, até 6), crescem 3 homens por turno, fogem de uma comitiva 1,3× mais forte e saqueiam: nas suas terras levam ouro e lealdade, a menos que a guarnição tenha o dobro deles. Nas terras de uma casa com quem você tem contato, ela **pede ajuda**: 80 ouro, relação +10 e influência +10 para quem destruir o bando.
+- **Combate em campo** quando Irian alcança um bando ou ataca uma escolta (ou é emboscado no fim do turno): Carga (+12% de força, mais perdas), Segurar a linha (menos perdas; +15% em colinas, montanhas ou se defendendo), Emboscada (em floresta, colina ou montanha, +30% por 3 de renome) ou Recuar (perde 12% e volta para a terra sua mais próxima). Vencer bandidos dá 2 ouro por bandido, renome e cativos libertados que entram na comitiva. Perder devolve Irian para a sede com 15% dos homens.
+- **Prisioneiros**: vencer a escolta de um lorde captura-o com 55% de chance (mais com vantagem). Escolhas: exigir juramento (aceita se a casa é provincial e você tem 25 de influência ou relação +10; as terras passam a ser suas), resgate (100 + 25% do tesouro dela), libertar com honra (relação +20, influência +10, renome +3) ou manter preso (a casa se defende 25% pior; relação −2 por turno). Atacar uma escolta em paz custa renome, relação −30 e ameaça.
+- **Diário**: os objetivos do momento, do mais urgente ao mais distante (expulsar bandos das suas terras, defender províncias, recompensas, reforçar a comitiva, visitar casas, a casa mais perto de jurar).
+- **Abertura e marcos**: uma cena de abertura conta quem é Irian e como jogar; virar grão-lorde abre a cena de conquista.
+
 ## A tela
 
 - Uma única tela: o mapa de Varedor em tela cheia, com zoom (roda, pinça, botões) e arraste. A câmera só se move por comando do jogador ou ao tocar numa notificação.
-- **Topo**: brasão e nome da casa (abre o menu), ambição (lorde → grão-lorde → rei → unificação) com o apoio atual, botão **Casas**, ouro, **renome**, os seis recursos (em vermelho quando zerados), data e velocidade.
-- **Base**: linha do tempo com o que está chegando nos próximos 36 dias (batedores, emissários, respostas, exércitos, assaltos, balanço, tributo, inverno) e as **quatro visões**.
+- **Topo**: brasão e nome da casa (abre o menu), ambição (lorde → grão-lorde → rei → unificação) com o apoio atual, botão **Casas**, ouro, **renome**, os seis recursos (em vermelho quando zerados; cada ganho ou perda sobe da barra), turno, data e as **3 ordens**.
+- **Base**: **Diário**, botão da **Comitiva**, as **quatro visões** e **Encerrar turno**.
 - **Carta**: ao tocar uma província aparece uma carta de pergaminho à direita com a casa em destaque (brasão, nome, lema, lorde, raça, idade, traços, relação, personalidade) e o lorde de corpo inteiro **dentro da carta**, numa coluna nas cores da casa. Nas suas terras aparece Irian ou o governador nomeado. O conteúdo muda com a visão e com quem governa a província.
 - **Lordes no mapa**: cada casa conhecida tem seu lorde de corpo inteiro de pé sobre a sede. Tocar o lorde abre a carta da casa; enquanto a carta está aberta, a figura sai do mapa para não duplicar a imagem. Toda província sua que não é a sede mostra o **estandarte com o seu brasão**.
 - **Audiência**: conversas e negociações abrem uma cena em tela cheia, com o lorde de corpo inteiro à esquerda e a troca à direita (falas de Irian, respostas no balão, consequências, corte da casa). 60 figuras provisórias em `public/assets/lords` (cada uma usada por um único personagem; quem não tem figura aparece pelo brasão).

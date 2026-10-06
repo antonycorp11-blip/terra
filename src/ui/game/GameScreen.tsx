@@ -103,7 +103,7 @@ export default function GameScreen({ game, setGame, act, notice, setNotice, io }
     {ui.report && report.length > 0 && !selected && !ui.partyMode ? <aside className={styles.report} data-ui aria-label="Relatório do turno">
       <header><span className={styles.k}>turno {ui.report.turn} · o que aconteceu</span><button onClick={() => ui.setReport(null)} aria-label="Fechar relatório"><Icon name="close" size={14}/></button></header>
       <div>{report.slice(-12).map(n => <button key={n.id} className={n.important ? styles.important : ''} onClick={() => { if (n.provinceId && knowledge(game, n.provinceId) >= 1) ui.focusProvince(n.provinceId) }}><b>{n.title}</b><span>{n.text}</span></button>)}</div>
-    </aside> : <LensSummary game={game} lens={ui.lens} filter={ui.resourceFilter} setFilter={ui.setResourceFilter}/>}
+    </aside> : !ui.partyMode && <LensSummary game={game} lens={ui.lens} filter={ui.resourceFilter} setFilter={ui.setResourceFilter}/>}
     {selected && <ProvinceCard key={`${selected}-${ui.lens}`} game={game} provinceId={selected} lens={ui.lens} act={act} onClose={() => select(null)}/>}
     {!selected && ui.partyMode && <PartyCard game={game} act={act} onClose={() => ui.setPartyMode(false)}/>}
 

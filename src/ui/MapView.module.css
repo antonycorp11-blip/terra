@@ -34,7 +34,9 @@
 .band i{font-style:normal;color:#ffd166}
 @keyframes prowl{50%{box-shadow:0 0 0 4px rgba(255,106,82,.25),0 2px 8px rgba(0,0,0,.55)}}
 /* Where the retinue can go this turn. */
-.reach{position:absolute;transform:translate(-50%,-50%);width:34px;height:34px;border-radius:50%;border:2px solid #f1cf73;background:rgba(43,34,8,.72);pointer-events:auto;cursor:pointer;display:grid;place-items:center;box-shadow:0 0 0 4px rgba(241,207,115,.22),0 3px 8px rgba(0,0,0,.5);animation:beckon 1.4s ease-in-out infinite;z-index:6;padding:0}
+.reach{position:absolute;transform:translate(-50%,-50%);width:34px;height:34px;border-radius:50%;border:2px solid #f1cf73;background:rgba(43,34,8,.72);pointer-events:auto;cursor:pointer;display:grid;place-items:center;box-shadow:0 3px 8px rgba(0,0,0,.5);z-index:6;padding:0}
+/* The ring pulses, not the button: the target stays still under the finger. */
+.reach::after{content:'';position:absolute;inset:-6px;border-radius:50%;border:2px solid rgba(241,207,115,.55);animation:beckon 1.4s ease-in-out infinite;pointer-events:none}
 .reach span{font:700 13px 'Alegreya Sans SC',sans-serif;color:#ffe3a0}
-@keyframes beckon{50%{transform:translate(-50%,-50%) scale(1.12)}}
-@media (prefers-reduced-motion:reduce){.band,.reach{animation:none}}
+@keyframes beckon{0%{transform:scale(.85);opacity:.9}100%{transform:scale(1.35);opacity:0}}
+@media (prefers-reduced-motion:reduce){.band,.reach::after{animation:none}}

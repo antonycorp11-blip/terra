@@ -1,5 +1,30 @@
 # Progresso real
 
+## Recomeço por turnos — Irian no mapa, ao estilo Bannerlord: 06/10/2026
+
+O jogador achou o jogo sem graça: "só um mapa e algumas coisas". Diagnóstico: não havia uma ação central (o jogador esperava os dias passarem e apertava botões em cartões), as consequências eram números, não havia tensão de curto prazo e o tempo real com pausa deixava tudo passivo no celular. Escolha do jogador: turnos com cenas, sensação de Bannerlord. Carta branca para mudar tudo.
+
+### Implementado
+
+- **Turnos de uma semana** com 3 ordens para ações à distância e o botão Encerrar turno; o relógio em tempo real foi removido.
+- **Irian e a comitiva no mapa**: marcadores de alcance, viagem em vários turnos, descoberta da terra, contato ao chegar, troca de homens com a guarnição, comitiva que cresce com as terras.
+- **Conversa só em pessoa**; banquete, patrocínio, presente, propostas e juramento sem custo de ordem quando Irian está com o lorde.
+- **Lordes que andam** com escoltas (caçam bandos, visitam o suserano, vão à guerra) e **bandos de salteadores** que saqueiam, fogem e crescem; casas pagam recompensa.
+- **Combate em campo** com tática, **captura de lordes** e decisão sobre o prisioneiro (juramento, resgate, libertar, manter).
+- **Batalha animada nova** (fileiras, estandartes, relevo do terreno, carga, choque, poeira e baixas caindo), **cena de combate** com as duas forças, **cena de abertura**, **cena de conquista** ao virar grão-lorde, **Diário** de objetivos, **relatório do turno** e ganhos e perdas flutuando na barra de recursos.
+
+### Validação em 06/10/2026
+
+- `npm test`: 56 testes (inclui `party.test.ts`).
+- `npm run test:ui`: 10 fluxos Playwright.
+- `npm run build`: sem erros.
+
+### Limitações conhecidas
+
+- As escoltas dos lordes não carregam o exército da casa: guerras entre casas e cercos continuam com os exércitos de antes.
+- Bandos e escoltas só existem no reino do jogador.
+
+
 ## Profundidade — governar o que se conquista, mundo vivo, conquista mais dura: concluída em 06/10/2026
 
 Resposta ao teste no celular: dias sem nada mudar, conquista fácil demais, população que não crescia, terra conquistada sem uso, diálogos iguais e telas apertadas.

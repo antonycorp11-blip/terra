@@ -13,10 +13,12 @@ async function foundHouse(page: Page, name = 'Ravencor') {
   await page.getByRole('button', { name: 'Continuar ›' }).click()
   await page.getByRole('button', { name: 'Fundar Minha Casa' }).click()
   await expect(map(page)).toBeVisible({ timeout: 30_000 })
+  await page.getByRole('button', { name: 'Pegar a espada' }).click()
 }
+const endTurn = (page: Page) => page.getByRole('button', { name: 'Encerrar turno' })
 /** Development-only handle (src/ui/game/GameScreen.tsx) used to fast-forward a campaign. */
 /**
- * Runs time until `target` appears. World events, the liege's letters and battles along the way are
+ * Ends turns until `target` appears. World events, the liege's letters and battles along the way are
  * answered with their last (most cautious) choice, as a passive player would.
  */
 async function runUntil(page: Page, name: string | RegExp, timeout = 60_000) {
@@ -31,7 +33,7 @@ async function runUntil(page: Page, name: string | RegExp, timeout = 60_000) {
       // A new dialog may replace this one mid-click; short timeouts keep the loop moving.
       if (await cont.count()) await cont.last().click({ timeout: 1500 }).catch(() => {})
       else { const choices = other.locator('button[class*="choice"]'); if (await choices.count()) await choices.last().click({ timeout: 1500 }).catch(() => {}) }
-    } else if (await page.getByRole('button', { name: 'Continuar' }).isVisible()) await page.getByRole('button', { name: 'Velocidade 3' }).click({ timeout: 1500 }).catch(() => {})
+    } else if (await endTurn(page).isEnabled()) await endTurn(page).click({ timeout: 1500 }).catch(() => {})
     await page.waitForTimeout(150)
   }
   await expect(target).toBeVisible()
@@ -66,6 +68,9 @@ test('cria uma casa personalizada em três etapas com brasão ao vivo', async ({
   await page.getByRole('button', { name: 'Continuar ›' }).click()
   for (const text of ['Velária', 'Três Pontes', 'Pontevela', 'Castelo da Ponte Alta', '700', '1.240']) await expect(page.getByText(text, { exact: true }).first()).toBeVisible()
   await page.getByRole('button', { name: 'Fundar Minha Casa' }).click()
+  // The opening scene tells who Irian is and how to play.
+  await expect(page.getByRole('dialog', { name: 'Começo da campanha' })).toContainText('Irian da Casa Santiago')
+  await page.getByRole('button', { name: 'Pegar a espada' }).click()
   await expect(page.getByRole('button', { name: 'Abrir menu' })).toContainText('Casa Santiago')
   await expect(page.getByRole('tablist', { name: 'Visões do mapa' }).getByRole('tab')).toHaveText(['Território', 'Diplomacia', 'Militar', 'Influência'])
 })
@@ -114,10 +119,9 @@ test('conquista militar: marcha, cerco, tática, batalha animada e juramento mud
   await card(page).getByLabel('Homens para a campanha').fill('1450')
   await card(page).getByRole('button', { name: /Marchar contra/ }).click()
   await expect(page.getByText(/Seu exército de \d+ homens está a caminho/)).toBeVisible()
-  await page.getByRole('button', { name: 'Velocidade 3' }).click()
+  await expect(page.getByLabel('Turno', { exact: true }).locator('i[class*="on"]')).toHaveCount(2) // the march cost an order
   // Events, the liege's summons and his relief army may interrupt the siege: answer and keep going.
   const decision = await runUntil(page, /As muralhas de/, 90_000)
-  await expect(decision.getByText('o tempo parou')).toBeVisible()
   await decision.getByRole('button', { name: /Ataque ao amanhecer/ }).click()
   const battle = page.getByRole('dialog', { name: /Batalha de/ })
   await expect(battle).toBeVisible()
@@ -142,6 +146,8 @@ test('conversas respeitam as duas consciências de um duário', async ({ page })
   await foundHouse(page)
   await lord(page, 'Casa Quellan').click()
   await expect(card(page).getByText('Duas consciências.')).toBeVisible()
+  // Lords are met in person: the retinue rides to Aguasanta first.
+  await card(page).getByRole('button', { name: /Ir até Bertram/ }).click()
   await card(page).getByRole('button', { name: /Conversar com Bertram/ }).click()
   const talk = page.getByRole('dialog', { name: 'Conversa com Bertram' })
   await talk.getByRole('button', { name: /Elogiar/ }).click()
@@ -153,23 +159,42 @@ test('conversas respeitam as duas consciências de um duário', async ({ page })
 })
 
 test('o mundo não para: acontecimentos pedem decisões com consequência', async ({ page }) => {
+  test.setTimeout(90_000)
   await foundHouse(page)
-  await page.getByRole('button', { name: 'Velocidade 3' }).click()
   const event = page.getByRole('dialog').filter({ hasText: 'acontecimento' })
-  await expect(event).toBeVisible({ timeout: 20_000 })
+  for (let i = 0; i < 6 && !(await event.isVisible()); i++) {
+    const other = page.getByRole('dialog').first()
+    if (await other.isVisible()) await other.locator('button[class*="choice"]').last().click()
+    else await endTurn(page).click()
+    await page.waitForTimeout(300)
+  }
+  await expect(event).toBeVisible()
   await event.locator('button[class*="choice"]').first().click()
   await expect(event).toBeHidden()
-  await expect(page.getByRole('button', { name: 'Continuar' })).toBeVisible()
+  await expect(page.getByLabel('Relatório do turno')).toBeVisible()
+})
+
+test('a comitiva de Irian anda pelo mapa, e encerrar o turno mostra o que aconteceu', async ({ page }) => {
+  await foundHouse(page)
+  await page.getByRole('button', { name: 'Irian e a comitiva' }).click()
+  await expect(page.getByRole('complementary', { name: 'Comitiva de Irian' })).toContainText('45 homens')
+  const markers = page.locator('button[aria-label^="Levar a comitiva para"]')
+  await expect(markers.first()).toBeVisible()
+  const before = await markers.count()
+  expect(before).toBeGreaterThan(3)
+  await markers.first().click()
+  await expect(page.getByRole('button', { name: 'Comitiva de Irian' })).toContainText(/[01] mov/)
+  await endTurn(page).click()
+  await expect(page.getByLabel('Turno', { exact: true })).toContainText('Turno 2')
+  await expect(page.getByRole('button', { name: 'Comitiva de Irian' })).toContainText('2 mov')
 })
 
 test('a convocação do grão-lorde pausa o tempo e exige uma decisão', async ({ page }) => {
   test.setTimeout(90_000)
   await foundHouse(page)
-  await page.getByRole('button', { name: 'Velocidade 3' }).click()
   const levy = await runUntil(page, 'Convocação da Casa Hadrin', 60_000)
   await levy.getByRole('button', { name: /Enviar 100 homens/ }).click()
   await expect(levy).toBeHidden()
-  await expect(page.getByRole('button', { name: 'Continuar' })).toBeVisible()
 })
 
 test('salvar e carregar mantém a campanha', async ({ page }) => {
