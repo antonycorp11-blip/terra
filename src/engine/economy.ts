@@ -15,7 +15,7 @@ export function provinceProduction(g: GameState, p: Province): Production {
   return out
 }
 export const provinceUpkeep = (p: Province) => ({ administration: round5(p.population * .0065), consumption: round5(p.population * .0242) })
-export const menUnderArms = (g: GameState) => Object.values(g.campaign.garrisons).reduce((a, b) => a + b, 0) + g.campaign.armies.filter(a => a.houseId === g.playerHouseId && a.status !== 'dissolvido').reduce((a, b) => a + b.men, 0)
+export const menUnderArms = (g: GameState) => Object.values(g.campaign.garrisons).reduce((a, b) => a + b, 0) + g.campaign.armies.filter(a => a.houseId === g.playerHouseId && a.status !== 'dissolvido').reduce((a, b) => a + b.men, 0) + (g.campaign.parties.find(p => p.id === 'party-player')?.men ?? 0)
 export const adminOf = (g: GameState, id: Id): ProvinceAdmin => g.campaign.admin[id] ?? { tax: 'normal', governor: null }
 export const conditionOf = (g: GameState, id: Id, kind: string) => g.campaign.conditions.some(c => c.provinceId === id && c.kind === kind && c.until > g.day)
 

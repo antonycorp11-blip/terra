@@ -10,6 +10,7 @@ import { menUnderArms } from './economy'
 import { defenders } from './military'
 import { offersFor, threatTo } from './negotiation'
 import { debtOf } from './influence'
+import { presentWith } from './party'
 
 /** What Irian can say. The label is the player's own line in the conversation. */
 export const TOPICS: Record<DialogueTopic, string> = {
@@ -108,6 +109,7 @@ export function converse(game: GameState, id: Id, topic: DialogueTopic) {
   requireRule(TOPICS[topic], 'Conversa inválida.')
   requireRule(topicsFor(game, original).includes(topic), 'Esse assunto não cabe aqui.')
   requireRule(dialogueWait(game, id, topic) === 0, 'Aguarde antes de repetir este assunto.')
+  requireRule(original.houseId === game.playerHouseId || presentWith(game, original.houseId), 'Para conversar, leve a comitiva de Irian até onde esse lorde está.')
   const g = editGame(game), c = g.campaign.characters.find(c => c.id === id)!
   const p = g.world.provinces.find(p => p.id === c.provinceId)!, h = g.world.houses.find(h => h.id === c.houseId)!
   const contact = g.campaign.contacts.find(d => d.houseId === c.houseId)

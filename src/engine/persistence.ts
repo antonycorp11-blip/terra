@@ -36,7 +36,7 @@ export async function loadGame(slot: string): Promise<GameState | null> {
 }
 export function migrateGame(game: LegacyGame): GameState {
   if (game.version !== 1 && game.version !== 2 && game.version !== 3) throw new Error('Versão de campanha não suportada.')
-  if (game.version === 3 && game.campaign?.revision === 3 && (game.world as { geographyRevision: number }).geographyRevision === 4) return game as GameState
+  if (game.version === 3 && game.campaign?.revision === 4 && (game.world as { geographyRevision: number }).geographyRevision === 4) return game as GameState
   return migrateGeography(game)
 }
 /**

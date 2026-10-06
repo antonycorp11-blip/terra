@@ -22,7 +22,7 @@ export const BALANCE = {
     levyShare: .08, barracksShare: .03,
     /** Each day of siege, disease and desertion take a share of the besiegers; winter doubles it. */
     siegeAttrition: .006,
-    upkeepFreeMen: 325, upkeepGoldPer10: 1, marchFoodPer10PerDay: 1,
+    upkeepFreeMen: 370, upkeepGoldPer10: 1, marchFoodPer10PerDay: 1,
     hopDays: 3, terrainHop: { 'planície': 0, 'várzea': 1, 'litoral': 0, 'colina': 1, 'floresta': 1, 'montanha': 3 } as Record<string, number>,
     siegeDaysPerWall: 4, siegeBaseDays: 4, wallBonus: .28,
     tactics: { assalto: { power: 1, extraDays: 0, attackerLoss: .42, label: 'Assalto direto' }, amanhecer: { power: 1.14, extraDays: 0, attackerLoss: .34, renown: 4, label: 'Ataque ao amanhecer' }, cerco: { power: 1, defenderFactor: .68, extraDays: 8, attackerLoss: .22, foodPer10: 6, label: 'Cercar e esfomear' } },
@@ -42,6 +42,13 @@ export const BALANCE = {
   vassal: { tribute: { generosos: .15, firmes: .3 }, loyalty: { militar: 35, diplomacia: 70, 'influência': 60, generosos: 15, firmes: -5 }, monthlyRenown: 1, rebelBelow: 15 },
   politics: { threatPerVassal: { militar: 30, diplomacia: 18, 'influência': 15 }, threatOccupation: 30, warned: 40, ultimatum: 60, war: 80, decay: 2, tributeDays: 90, tributeGold: 60, submitGold: 200, submitRelief: 30, kingPerVassal: 12, kingOffer: 30, kingPactGold: 200, levyDay: 25, levyMen: 100, levyDays: 20 },
   events: { minGap: 6, spread: 6 },
+  /** A turn is a week. Orders pay for actions at a distance; what Irian does in person is free. */
+  turn: { days: 7, orders: 3 },
+  /** Irian's retinue grows with the land he rules. */
+  party: { moves: 2, start: 45, capBase: 60, capPerProvince: 30, transfer: 25, npcShare: .2, npcBase: 25, defeatKeep: .15, defeatRenown: 5 },
+  field: { investida: { power: 1.12, loss: .36, label: 'Carga' }, linha: { power: 1, loss: .24, label: 'Segurar a linha' }, emboscada: { power: 1.3, loss: .2, label: 'Emboscada', renown: 3 }, retreatLoss: .12 },
+  bandits: { maxBase: 2, perTurns: 8, maxBands: 6, startMen: 18, growth: 3, cap: 140, raidGold: 20, raidLoyalty: 3, lootPerMan: 2, renown: 3, garrisonGuard: 2, flee: 1.3, rewardGold: 80, rewardInfluence: 10, rewardRelation: 10 },
+  prisoner: { ransomBase: 100, ransomShare: .25, freeRelation: 20, freeInfluence: 10, freeRenown: 3, keepRelation: 2, keepThreat: 5, captureChance: 55, captiveDefense: .75 },
   world: { warEvery: 24, ardeshWarDay: 40, hadrinDeathDay: 170, peaceAfter: 90 },
   trade: { price: { 'grãos': 1, madeira: 1.5, pedra: 2.5, ferro: 3, sal: 2, prata: 6 } as Record<string, number>, batch: 50, hostileBelow: -10 },
 } as const

@@ -71,5 +71,7 @@ export function becomeGrandLord(g: GameState) {
   if (!isVassal(g, old.id)) makeVassal(g, old.id, 'militar', 'firmes')
   g.campaign.politics.stage = 'reconhecido'; g.campaign.politics.liegeThreat = 0
   record(g, `A ${h.name} foi reconhecida como grã-senhora de ${fief.name}.`, [h.id, fief.id])
+  // A milestone scene: the first rung of the ladder is climbed.
+  g.campaign.decisions.push({ id: nextId(g, 'decision'), kind: 'evento', day: g.day, provinceId: h.seatProvinceId, houseId: null, resolved: false, event: { key: 'marco', title: `Grão-lorde de ${fief.name}`, text: `No salão de ${playerSeat(g).name}, as casas de ${fief.name} se ajoelham. A ${old.name} entrega o estandarte do feudo, e a coroa manda o selo que reconhece o título. Irian já não é um lorde de ponte: é o senhor de ${fief.name}. Próxima ambição: o trono de ${g.world.realms.find(r => r.id === h.realmId)!.name}.`, data: {}, choices: [{ id: 'seguir', label: 'Erguer a taça', detail: 'Renome +25. As casas do feudo agora respondem a você.' }] } })
   notify(g, 'Grão-lorde de ' + fief.name, `As casas de ${fief.name} juram lealdade a você, e a coroa reconhece o título. Próxima ambição: o trono de ${g.world.realms.find(r => r.id === h.realmId)!.name}.`, h.seatProvinceId, true)
 }

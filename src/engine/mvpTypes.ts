@@ -34,7 +34,9 @@ export interface Army {
   siegeEndDay?: number; startDay: number; starved?: boolean
 }
 export interface BattlePhase { label: string; attacker: number; defender: number }
-export interface BattleRecord { id: Id; day: number; provinceId: Id; attackerHouseId: Id; defenderHouseId: Id; tactic: Tactic; attackerStart: number; defenderStart: number; attackerLeft: number; defenderLeft: number; wall: number; victory: boolean; phases: BattlePhase[]; summary: string }
+export type FieldTactic = 'investida' | 'linha' | 'emboscada'
+/** `bandit` names the side that was a band of outlaws (it has no house). */
+export interface BattleRecord { id: Id; day: number; provinceId: Id; attackerHouseId: Id; defenderHouseId: Id; tactic: Tactic | FieldTactic; bandit?: { side: 'attacker' | 'defender'; name: string }; attackerStart: number; defenderStart: number; attackerLeft: number; defenderLeft: number; wall: number; victory: boolean; phases: BattlePhase[]; summary: string }
 export interface Claim { provinceId: Id; day: number; source: string }
 export type BondKind = 'dívida' | 'segredo' | 'casamento'
 export interface Bond { houseId: Id; kind: BondKind; day: number; text: string }
@@ -49,8 +51,16 @@ export interface WorldEvent { key: string; title: string; text: string; choices:
 export interface War { id: Id; attackerId: Id; defenderId: Id; startDay: number; reason: string; active: boolean }
 export type OfferKind = 'ouro' | 'prata' | 'comércio' | 'proteção' | 'casamento' | 'perdão'
 export interface Negotiation { id: Id; houseId: Id; kind: 'comércio' | 'aliança' | 'vassalagem'; round: number; status: 'aberta' | 'aguardando' | 'aceita' | 'recusada'; offers: OfferKind[]; replyDay: number; lastScore: number; needed: number; startDay: number; log: string[] }
-export type DecisionKind = 'assalto' | 'submissão' | 'ultimato' | 'rei' | 'convocação' | 'juramento' | 'evento'
-export interface Decision { id: Id; kind: DecisionKind; day: number; provinceId: Id | null; houseId: Id | null; armyId?: Id; resolved: boolean; choice?: string; event?: WorldEvent }
+export type DecisionKind = 'assalto' | 'submissão' | 'ultimato' | 'rei' | 'convocação' | 'juramento' | 'evento' | 'combate'
+/**
+ * A band on the map: the player's own retinue, a lord travelling with his escort, or outlaws.
+ * Parties move from province to province once per turn; the player's moves are spent during the turn.
+ */
+export interface Party { id: Id; kind: 'lorde' | 'bandidos'; houseId: Id | null; leaderId: Id | null; name: string; men: number; provinceId: Id; homeId: Id; goal: Id | null; moves: number; wounded: number }
+export interface Prisoner { characterId: Id; houseId: Id; since: number; askedTurn: number }
+/** A house asks for help against outlaws raiding its lands; the reward is paid when the band falls. */
+export interface Quest { id: Id; houseId: Id; partyId: Id; gold: number; influence: number; relation: number; turn: number; done: boolean }
+export interface Decision { id: Id; kind: DecisionKind; day: number; provinceId: Id | null; houseId: Id | null; armyId?: Id; resolved: boolean; choice?: string; event?: WorldEvent; partyId?: Id; ambush?: boolean }
 export interface Politics {
   /** How threatening the liege (grand lord) finds the player, 0–100. */
   liegeThreat: number
@@ -62,7 +72,7 @@ export interface Politics {
 }
 export interface LordTravel { provinceId: Id; route: Id[]; startDay: number; arriveDay: number; returnDay: number; arrived: boolean; ambushed: boolean }
 export interface CampaignData {
-  revision: 3; customization: PlayerHouseCustomization; knowledge: Record<Id, KnowledgeState>
+  revision: 4; customization: PlayerHouseCustomization; knowledge: Record<Id, KnowledgeState>
   expeditions: Expedition[]; investments: ProvinceInvestment[]; ledger: EconomicLedger[]
   characters: Character[]; contacts: DiplomaticContact[]; diplomacy: DiplomaticMission[]
   agents: SpyAgent[]; spyMissions: SpyMission[]; reports: IntelligenceReport[]; conversations: ConversationRecord[]
@@ -81,4 +91,10 @@ export interface CampaignData {
   wars: War[]
   /** Temporary modifiers on provinces, e.g. drought or plague, until a given day. */
   conditions: { provinceId: Id; kind: 'seca' | 'peste' | 'bandidos' | 'revolta'; until: number }[]
+  /** Turn-based play: each turn is a week; orders are the remote actions left this turn. */
+  turn: number
+  orders: number
+  parties: Party[]
+  prisoners: Prisoner[]
+  quests: Quest[]
 }

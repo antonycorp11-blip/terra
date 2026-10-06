@@ -6,6 +6,7 @@ import { converse, dialogueWait, playerLine, topicsFor, TOPICS } from '../../eng
 import { canConverse, RACE_LABEL } from '../../engine/characters'
 import { offersFor, propose, scoreOffer, NEGOTIATION_LABEL, threatTo } from '../../engine/negotiation'
 import { relationWith } from '../../engine/influence'
+import { orderCost, withOrder } from '../../engine/party'
 import Crest from '../Heraldry'
 import Icon from '../Icons'
 import { type Act } from '../parts'
@@ -89,8 +90,8 @@ export function NegotiationScene({ game, negotiationId, act, onClose }: { game: 
     </button> })}</div>
     {n.log.length > 0 && <p className={styles.history}>{n.log.at(-1)}</p>}
     <footer className={styles.send}>
-      <span>{costText}<small>devolvido se recusarem</small></span>
-      {n.status === 'aberta' ? <button className={styles.primary} onClick={() => act(g => propose(g, n.id, picked), 'Proposta enviada')}>Enviar proposta</button> : <button className={styles.secondary} onClick={onClose}>Voltar ao mapa</button>}
+      <span>{costText}{orderCost(game, house.id) ? ' · 1 ordem' : ' · em pessoa'}<small>devolvido se recusarem</small></span>
+      {n.status === 'aberta' ? <button className={styles.primary} onClick={() => act(g => withOrder(g, g => propose(g, n.id, picked), orderCost(g, house.id)), 'Proposta enviada')}>Enviar proposta</button> : <button className={styles.secondary} onClick={onClose}>Voltar ao mapa</button>}
     </footer>
   </Stage>
 }

@@ -8,12 +8,23 @@ import { makeVassal, type Terms } from './vassals'
 import { liegeHouse, sovereign, declareWar } from './politics'
 import { newArmy, armyRoute } from './military'
 import { resolveEvent } from './events'
+import { fieldQuote, fight } from './party'
 
 export const openDecisions = (g: GameState) => g.campaign.decisions.filter(d => !d.resolved)
 export interface Choice { id: string; label: string; detail: string; cost?: string }
 /** The options each decision offers, with their consequences spelled out for the player. */
 export function choicesFor(g: GameState, d: Decision): Choice[] {
   if (d.kind === 'evento') return d.event!.choices
+  if (d.kind === 'combate') {
+    const q = fieldQuote(g, d), F = BALANCE.field
+    const list: Choice[] = [
+      { id: 'investida', label: F.investida.label, detail: 'Atacar de frente com tudo: mais força, mais perdas.' },
+      { id: 'linha', label: F.linha.label, detail: d.ambush ? 'Defender-se em formação: perdas menores, +15% de força.' : 'Avançar em formação: perdas menores.' },
+    ]
+    if (q.cover && !d.ambush) list.push({ id: 'emboscada', label: F.emboscada.label, detail: 'Usar o terreno para surpreender: +30% de força.', cost: `${F.emboscada.renown} renome` })
+    list.push({ id: 'recuar', label: 'Recuar', detail: `Fugir para a terra sua mais próxima perdendo ${Math.round(F.retreatLoss * 100)}% dos homens.` })
+    return list
+  }
   const P = BALANCE.politics, M = BALANCE.military
   switch (d.kind) {
     case 'assalto': {
@@ -48,6 +59,7 @@ export function resolveDecision(game: GameState, decisionId: Id, choice: string)
   requireRule(d && !d.resolved, 'Essa decisão já foi tomada.')
   requireRule(choicesFor(game, d).some(c => c.id === choice), 'Escolha inválida.')
   if (d.kind === 'assalto') return assault(game, d.armyId!, choice as Tactic)
+  if (d.kind === 'combate') { const g = editGame(game), dec = g.campaign.decisions.find(x => x.id === decisionId)!; dec.resolved = true; fight(g, dec, choice); return g }
   const g = editGame(game), dec = g.campaign.decisions.find(x => x.id === decisionId)!, pol = g.campaign.politics, P = BALANCE.politics
   const path = dec.choice === 'diplomacia' ? 'diplomacia' : dec.choice === 'influência' ? 'influência' : 'militar'
   dec.resolved = true

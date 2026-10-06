@@ -1,17 +1,18 @@
-import { useState, type ReactNode } from 'react'
+import { createContext, useContext, useState, type ReactNode } from 'react'
 import type { GameState, Id, Province, Resource } from '../../engine/types'
 import { RESOURCES } from '../../engine/types'
 import { BALANCE } from '../../engine/balance'
 import { adminOf, conditionOf, governorCandidates, provinceBalance, setGovernor, setTax } from '../../engine/economy'
 import { startInvestment, workInProgress, workQuote, mineYield } from '../../engine/investments'
 import { canExplore, expeditionQuote, sendExpedition } from '../../engine/exploration'
-import { startTravel, travelQuote, sellers, purchaseQuote, buyResource } from '../../engine/travel'
-import { canConverse, RACE_LABEL, rulerOf } from '../../engine/characters'
+import { sellers, purchaseQuote, buyResource } from '../../engine/travel'
+import { RACE_LABEL, rulerOf } from '../../engine/characters'
 import { sendEmissary, diplomaticAction } from '../../engine/diplomacy'
 import { negotiationBlocked, startNegotiation, NEGOTIATION_LABEL } from '../../engine/negotiation'
 import { attack, attackQuote, defenders, levyCap, moveTroops, recruit, upgradeWalls, wallLevel } from '../../engine/military'
 import { influenceAction, influenceOf, cooldownLeft, debtOf, oathReady, proposeOath, canInfluence, relationWith, bondWith } from '../../engine/influence'
 import { hireSpy, sendSpy, spyQuote } from '../../engine/espionage'
+import { attackParty, hostile, lordLocation, moveParty, moveToward, partyPath, orderCost, partyReach, playerParty, presentWith, withOrder } from '../../engine/party'
 import { conquestPlan, PATH_LABEL } from '../../engine/plans'
 import { disposition } from '../../engine/relationships'
 import { controlled, inPlayerRealm, isVassal } from '../../engine/stateUtils'
@@ -27,9 +28,14 @@ import styles from './Game.module.css'
 interface Props { game: GameState; provinceId: Id; lens: Lens; act: Act; onClose: () => void }
 const PATH_COLOR = ['#c0473a', '#2f8d97', '#c9a23e']
 
-function Action({ label, detail, onClick, disabled, tone }: { label: string; detail?: string; onClick: () => void; disabled?: boolean | string; tone?: 'sec' | 'risk' | 'war' }) {
-  return <button className={`${styles.act} ${tone ? styles[tone] : ''}`} onClick={onClick} disabled={Boolean(disabled)} title={typeof disabled === 'string' ? disabled : undefined}>
-    <span>{label}</span>{(typeof disabled === 'string' ? disabled : detail) && <small>{typeof disabled === 'string' ? disabled : detail}</small>}
+/** Orders left this turn, for every action that costs one. */
+const Orders = createContext(3)
+function Action({ label, detail, onClick, disabled, tone, cost = 0 }: { label: string; detail?: string; onClick: () => void; disabled?: boolean | string; tone?: 'sec' | 'risk' | 'war'; cost?: number }) {
+  const left = useContext(Orders)
+  const blocked = disabled || (cost > left && 'sem ordens neste turno')
+  const text = typeof blocked === 'string' ? blocked : detail
+  return <button className={`${styles.act} ${tone ? styles[tone] : ''}`} onClick={onClick} disabled={Boolean(blocked)} title={typeof blocked === 'string' ? blocked : undefined}>
+    <span>{label}</span><small>{text}{cost > 0 && !blocked ? <em className={styles.seal}>1 ordem</em> : null}</small>
   </button>
 }
 const Section = ({ title, children }: { title: string; children: ReactNode }) => <section className={styles.cardSection}><span className={styles.cardH}>{title}</span>{children}</section>
@@ -61,19 +67,48 @@ export default function ProvinceCard({ game, provinceId, lens, act, onClose }: P
       <img src={cardUrl(figure!.portraitAsset!)} alt={`${figure!.name}, ${house.name}`}/>
       <span className={styles.figureName}><b>{figure!.name}</b>{figure === governor ? 'governador' : ruler.role.toLowerCase()}</span>
     </div>}
-    <div className={styles.cardBody}>
+    <div className={styles.cardBody}><Orders.Provider value={game.campaign.orders}>
       {level === 'known' && <div className={styles.k}>{p.name} · {fief.name} · {realm.name}</div>}
+      {level !== 'hidden' && <Road game={game} p={p} act={act}/>}
       {body}
       {level === 'known' && !mine && lens === 'territorio' && <Ways game={game} p={p} onOpen={path => ui.openSheet({ kind: 'plan', provinceId: p.id, path })}/>}
-      {level === 'known' && house.id !== game.playerHouseId && ruler && <div className={styles.acts}>
-        <Action label={`Conversar com ${ruler.name}`} detail={canConverse(game, ruler) ? 'conversa' : 'exige contato'} disabled={!canConverse(game, ruler) && 'Estabeleça contato antes'} tone="sec" onClick={() => ui.openSheet({ kind: 'conversation', characterId: ruler.id })}/>
-      </div>}
-    </div>
+      {level === 'known' && house.id !== game.playerHouseId && ruler && <Meet game={game} houseId={house.id} act={act}/>}
+    </Orders.Provider></div>
   </aside>
 }
 
 /** The house that held a province before it swore to the player. */
 const formerHouse = (game: GameState, p: Province) => { const v = game.campaign.vassals.find(x => x.provinceIds?.includes(p.id)); return v ? houseOf(game, v.houseId) : null }
+/** Irian's retinue and whoever else is on this province's roads. */
+function Road({ game, p, act }: { game: GameState; p: Province; act: Act }) {
+  const party = playerParty(game), cost = partyReach(game).get(p.id), here = party.provinceId === p.id, route = here || cost !== undefined ? null : partyPath(game, p.id)
+  const others = game.campaign.parties.filter(x => x.id !== party.id && x.provinceId === p.id)
+  const quest = (id: string) => game.campaign.quests.find(q => !q.done && q.partyId === id)
+  if (!here && cost === undefined && !route && !others.length) return null
+  return <div className={styles.road}>
+    {here ? <span className={styles.hereTag}><Icon name="militar" size={13}/>Irian está aqui com {party.men} homens</span>
+      : cost !== undefined ? <Action label="Levar a comitiva para cá" detail={`${cost} movimento${cost > 1 ? 's' : ''} · ${party.men} homens`} onClick={() => act(g => moveParty(g, p.id))}/>
+      : route ? <Action label="Seguir para cá" detail={`chega em ${Math.ceil(route.cost / BALANCE.party.moves)} turnos${party.moves ? '' : ' · a comitiva já andou neste turno'}`} disabled={!party.moves && 'encerre o turno para seguir'} onClick={() => act(g => moveToward(g, p.id))}/> : null}
+    {others.map(x => { const q = quest(x.id), foe = x.kind === 'bandidos'
+      return <div key={x.id} className={`${styles.meet} ${foe ? styles.outlaw : ''}`}>
+        {foe ? <Icon name="militar" size={20}/> : <Crest heraldry={heraldryOf(game, houseOf(game, x.houseId!))} size={24}/>}
+        <span><b>{foe ? x.name : `${rulerOf(game, x.houseId!).name} da ${houseOf(game, x.houseId!).name}`}</b>{x.men} {foe ? 'salteadores' : 'homens na escolta'}{q ? ` · recompensa da ${houseOf(game, q.houseId).name}: ${q.gold} ouro` : ''}</span>
+        {here && (foe || hostile(game, x.houseId!)) && <button className={`${styles.mini2} ${styles.danger}`} onClick={() => act(g => attackParty(g, x.id))}>Atacar</button>}
+      </div> })}
+  </div>
+}
+/** Lords are met in person: go where he is, then talk. */
+function Meet({ game, houseId, act }: { game: GameState; houseId: string; act: Act }) {
+  const ui = useUI(), ruler = rulerOf(game, houseId), at = lordLocation(game, houseId)
+  if (!at) return <p className={styles.small}>{ruler.name} é seu prisioneiro.</p>
+  const present = presentWith(game, houseId), cost = partyReach(game).get(at)
+  return <div className={styles.acts}>{present
+    ? <Action label={`Conversar com ${ruler.name}`} detail="em pessoa · sem custo" tone="sec" onClick={() => ui.openSheet({ kind: 'conversation', characterId: ruler.id })}/>
+    : cost !== undefined ? <Action label={`Ir até ${ruler.name}`} detail={`${knowledge(game, at) >= 2 ? provinceOf(game, at).name : 'terra avistada'} · ${cost} mov.`} tone="sec" onClick={() => act(g => moveParty(g, at))}/>
+    : partyPath(game, at) && playerParty(game).moves ? <Action label={`Seguir até ${ruler.name}`} detail={`está em ${knowledge(game, at) >= 2 ? provinceOf(game, at).name : 'terra avistada'} · ${Math.ceil(partyPath(game, at)!.cost / BALANCE.party.moves)} turnos`} tone="sec" onClick={() => act(g => moveToward(g, at))}/>
+    : <Action label={`Conversar com ${ruler.name}`} tone="sec" disabled={`está em ${knowledge(game, at) >= 2 ? provinceOf(game, at).name : 'terras distantes'}: leve a comitiva até lá`} onClick={() => {}}/>}
+  </div>
+}
 function HouseHeader({ game, p, mine }: { game: GameState; p: Province; mine: boolean }) {
   const house = houseOf(game, p.occupyingHouseId ?? p.governingHouseId), ruler = rulerOf(game, house.id)
   const rel = relationWith(game, house.id), vassal = isVassal(game, house.id)
@@ -92,16 +127,15 @@ function HouseHeader({ game, p, mine }: { game: GameState; p: Province; mine: bo
 }
 
 function Sighted({ game, p, act }: { game: GameState; p: Province; act: Act }) {
-  const q = expeditionQuote(game, p.id), t = travelQuote(game, p.id)
+  const q = expeditionQuote(game, p.id)
   const busy = game.campaign.expeditions.some(e => !e.completed && e.provinceId === p.id)
   return <>
     <div className={styles.k}>terra avistada · {p.terrain}</div><h4>Além das suas terras</h4>
     <p className={styles.note}>Daqui só se vê o relevo. Não sabemos quem governa, o que produz nem quantos homens guardam esta terra.</p>
     <div className={styles.acts}>
-      <Action label={busy ? 'Batedores a caminho' : 'Enviar batedores'} detail={`${q.gold} ouro · ${q.food} grãos · ${q.days} dias · risco baixo`} disabled={busy ? 'aguarde o retorno' : !canExplore(game, p.id) && (q.route.length < 2 ? 'sem caminho conhecido' : 'limite de 2 expedições')} onClick={() => act(g => sendExpedition(g, p.id), 'Batedores partiram')}/>
-      <Action tone="risk" label="Viajar pessoalmente" detail={`${t.days} dias · ${t.risk}% de emboscada · já faz o contato`} disabled={game.campaign.travel ? 'Irian já está viajando' : t.route.length < 2 && 'sem caminho conhecido'} onClick={() => act(g => startTravel(g, p.id), 'Irian partiu')}/>
+      <Action cost={1} label={busy ? 'Batedores a caminho' : 'Enviar batedores'} detail={`${q.gold} ouro · ${q.food} grãos · ${q.days} dias · risco baixo`} disabled={busy ? 'aguarde o retorno' : !canExplore(game, p.id) && (q.route.length < 2 ? 'sem caminho conhecido' : 'limite de 2 expedições')} onClick={() => act(g => withOrder(g, g => sendExpedition(g, p.id), 1), 'Batedores partiram')}/>
     </div>
-    <p className={styles.small}>Indo em pessoa, Irian conhece o senhor local e ganha a confiança dele, mas Pontevela fica sem lorde e a estrada pode ser perigosa.</p>
+    <p className={styles.small}>Ou leve a comitiva de Irian até lá: quem anda pelo mapa descobre a terra e conhece o lorde em pessoa.</p>
   </>
 }
 
@@ -156,7 +190,7 @@ function OwnTerritory({ game, p, act }: { game: GameState; p: Province; act: Act
     </Section>}
     <Section title="obras">{WORKS.map(kind => { const rule = BALANCE.investment[kind], q = workQuote(game, p.id, kind), wip = workInProgress(game, p.id, kind)
       const benefit = kind === 'mine' ? `+${mineYield(p).amount} ${mineYield(p).label}/mês` : rule.benefit
-      return <button key={kind} className={styles.work} disabled={Boolean(wip) || q.max} onClick={() => act(g => startInvestment(g, kind, p.id), 'Obras iniciadas')}>
+      return <button key={kind} className={styles.work} disabled={Boolean(wip) || q.max} onClick={() => act(g => withOrder(g, g => startInvestment(g, kind, p.id), 1), 'Obras iniciadas')}>
         <span className={styles.workName}>{rule.name}<small>{benefit} por nível</small></span>
         <span className={styles.pips}>{[1, 2, 3].map(i => <i key={i} className={i <= q.level ? styles.on : wip && i === q.next ? styles.wip : ''}/>)}</span>
         <span className={styles.workCost}>{wip ? `${wip.endDay - game.day} dias` : q.max ? 'máximo' : <>{q.gold} ouro · {q.wood} mad.<small>{q.days} dias</small></>}</span>
@@ -171,7 +205,7 @@ function ForeignTerritory({ game, p, act }: { game: GameState; p: Province; act:
   const pending = game.campaign.diplomacy.some(d => d.houseId === house.id && d.kind === 'emissary' && !d.completed)
   return <>
     <div className={styles.resRow}><b className={styles.mini}>produz</b>{resList(p.resources)}<b className={styles.mini}>falta</b>{resList(lack)}</div>
-    {!contact && house.id !== game.playerHouseId && !isVassal(game, house.id) && <div className={styles.acts}><Action label={pending ? 'Emissário a caminho' : 'Enviar emissário'} detail={`${BALANCE.diplomacy.gold} ouro · ${BALANCE.diplomacy.days}+ dias`} disabled={pending && 'aguarde'} onClick={() => act(g => sendEmissary(g, p.id), 'Emissário enviado')}/></div>}
+    {!contact && house.id !== game.playerHouseId && !isVassal(game, house.id) && <div className={styles.acts}><Action cost={1} label={pending ? 'Emissário a caminho' : 'Enviar emissário'} detail={`${BALANCE.diplomacy.gold} ouro · ${BALANCE.diplomacy.days}+ dias`} disabled={pending && 'aguarde'} onClick={() => act(g => withOrder(g, g => sendEmissary(g, p.id), 1), 'Emissário enviado')}/></div>}
   </>
 }
 
@@ -181,7 +215,7 @@ function OwnDiplomacy({ game, p, act }: { game: GameState; p: Province; act: Act
   return <>
     <Section title="faltam nas suas terras"><div className={styles.resRow}>{resList(missing)}</div></Section>
     <Section title="comprar de quem produz">
-      {missing.flatMap(r => sellers(game, r).slice(0, 3).map(h => { const q = purchaseQuote(game, h.id, r); return <Action key={r + h.id} tone="sec" label={`${q.amount} de ${r} · ${h.name.replace('Casa ', '')}`} detail={`${q.price} ouro`} disabled={q.refuses ?? false} onClick={() => act(g => buyResource(g, h.id, r), 'Compra feita')}/> }))}
+      {missing.flatMap(r => sellers(game, r).slice(0, 3).map(h => { const q = purchaseQuote(game, h.id, r); return <Action cost={1} key={r + h.id} tone="sec" label={`${q.amount} de ${r} · ${h.name.replace('Casa ', '')}`} detail={`${q.price} ouro`} disabled={q.refuses ?? false} onClick={() => act(g => withOrder(g, g => buyResource(g, h.id, r), 1), 'Compra feita')}/> }))}
       {!missing.some(r => sellers(game, r).length) && <p className={styles.small}>Ninguém que você conheça produz o que falta. Explore e faça contato.</p>}
     </Section>
     <Section title="pactos comerciais">{trades.length ? trades.map(c => <div key={c.houseId} className={styles.line}>{houseOf(game, c.houseId).name} · +{BALANCE.diplomacy.tradeIncome} ouro/mês</div>) : <p className={styles.small}>Nenhum ainda. Toque numa casa vizinha para negociar.</p>}</Section>
@@ -193,7 +227,7 @@ function ForeignDiplomacy({ game, p, act }: { game: GameState; p: Province; act:
   const open = game.campaign.negotiations.find(n => n.houseId === house.id && (n.status === 'aberta' || n.status === 'aguardando'))
   const negotiate = (kind: Negotiation['kind']) => act(g => { const n = startNegotiation(g, house.id, kind); ui.openSheet({ kind: 'negotiation', negotiationId: n.campaign.negotiations.at(-1)!.id }); return n })
   if (house.id === game.playerHouseId || isVassal(game, house.id)) return <p className={styles.small}>Esta terra é sua: toda a produção vai para o seu tesouro.</p>
-  if (!contact || contact.establishedDay === null) return <><p className={styles.note}>Sem contato. Um emissário abre as portas.</p><div className={styles.acts}><Action label="Enviar emissário" detail={`${BALANCE.diplomacy.gold} ouro`} disabled={game.campaign.diplomacy.some(d => d.houseId === house.id && !d.completed) && 'a caminho'} onClick={() => act(g => sendEmissary(g, p.id), 'Emissário enviado')}/></div></>
+  if (!contact || contact.establishedDay === null) return <><p className={styles.note}>Sem contato. Um emissário abre as portas.</p><div className={styles.acts}><Action cost={1} label="Enviar emissário" detail={`${BALANCE.diplomacy.gold} ouro`} disabled={game.campaign.diplomacy.some(d => d.houseId === house.id && !d.completed) && 'a caminho'} onClick={() => act(g => withOrder(g, g => sendEmissary(g, p.id), 1), 'Emissário enviado')}/></div></>
   const giftWait = contact.lastGiftDay === null ? 0 : Math.max(0, contact.lastGiftDay + BALANCE.diplomacy.giftCooldown - game.day)
   return <>
     <Section title="por que esta relação"><ul className={styles.reasons}>{contact.reasons.slice(0, 4).map(r => <li key={r}>{r}</li>)}</ul></Section>
@@ -201,8 +235,8 @@ function ForeignDiplomacy({ game, p, act }: { game: GameState; p: Province; act:
     <div className={styles.acts}>
       {open ? <Action label="Ver a negociação" detail={open.status === 'aguardando' ? `resposta em ${open.replyDay - game.day} dias` : `rodada ${open.round}`} onClick={() => ui.openSheet({ kind: 'negotiation', negotiationId: open.id })}/>
         : (['comércio', 'aliança', 'vassalagem'] as const).map(k => <Action key={k} label={`Negociar ${NEGOTIATION_LABEL[k].toLowerCase()}`} tone={k === 'comércio' ? undefined : 'sec'} disabled={negotiationBlocked(game, house.id, k) ?? false} onClick={() => negotiate(k)}/>)}
-      <Action tone="sec" label="Enviar presente" detail={`${BALANCE.diplomacy.giftGold} ouro · +10 relação`} disabled={giftWait > 0 && `de novo em ${giftWait} dias`} onClick={() => act(g => diplomaticAction(g, house.id, 'gift'), 'Presente enviado')}/>
-      {p.resources.filter(r => r !== 'grãos').map(r => { const q = purchaseQuote(game, house.id, r); return <Action key={r} tone="sec" label={`Comprar ${q.amount} de ${r}`} detail={`${q.price} ouro`} disabled={q.refuses ?? false} onClick={() => act(g => buyResource(g, house.id, r), 'Compra feita')}/> })}
+      <Action cost={orderCost(game, house.id)} tone="sec" label="Enviar presente" detail={`${BALANCE.diplomacy.giftGold} ouro · +10 relação`} disabled={giftWait > 0 && `de novo em ${giftWait} dias`} onClick={() => act(g => withOrder(g, g => diplomaticAction(g, house.id, 'gift'), orderCost(game, house.id)), 'Presente enviado')}/>
+      {p.resources.filter(r => r !== 'grãos').map(r => { const q = purchaseQuote(game, house.id, r); return <Action cost={1} key={r} tone="sec" label={`Comprar ${q.amount} de ${r}`} detail={`${q.price} ouro`} disabled={q.refuses ?? false} onClick={() => act(g => withOrder(g, g => buyResource(g, house.id, r), 1), 'Compra feita')}/> })}
     </div>
   </>
 }
@@ -217,12 +251,12 @@ function OwnMilitary({ game, p, act }: { game: GameState; p: Province; act: Act 
     <p className={styles.small}>Até {Math.round((M.levyShare + M.barracksShare * workQuote(game, p.id, 'barracks').level) * 100)}% da população pode servir ({fmt(p.population)} habitantes). A população cresce {signed(provinceBalance(game, p).growth.perMonth)} por mês; fazendas, comida e lealdade aceleram. Um quartel (visão Território) aumenta o limite.</p>
     <div className={styles.acts}>
       <Action label={`Recrutar ${M.recruitBatch} homens`} detail={`${M.recruitGold} ouro · ${M.recruitRenown} renome · ${M.recruitIron} ferro`} disabled={men + M.recruitBatch > cap && 'população no limite'} onClick={() => act(g => recruit(g, p.id), 'Recrutamento')}/>
-      <Action tone="sec" label={`Reforçar muralhas (nível ${wall + 1})`} detail={`${M.wallUpgrade.stone} pedra · ${M.wallUpgrade.gold} ouro`} disabled={wall >= 5 && 'nível máximo'} onClick={() => act(g => upgradeWalls(g, p.id), 'Muralhas reforçadas')}/>
+      <Action cost={1} tone="sec" label={`Reforçar muralhas (nível ${wall + 1})`} detail={`${M.wallUpgrade.stone} pedra · ${M.wallUpgrade.gold} ouro`} disabled={wall >= 5 && 'nível máximo'} onClick={() => act(g => withOrder(g, g => upgradeWalls(g, p.id), 1), 'Muralhas reforçadas')}/>
     </div>
     {realm.length > 0 && <Section title="deslocar tropas">
       <div className={styles.moveRow}><select value={to} onChange={e => setTo(e.target.value)} aria-label="Destino"><option value="">destino…</option>{realm.map(x => <option key={x.id} value={x.id}>{x.name} ({game.campaign.garrisons[x.id] ?? 0})</option>)}</select>
         <input type="range" min={50} max={Math.max(50, men)} step={25} value={count} onChange={e => setCount(+e.target.value)} aria-label="Homens"/><b>{count}</b></div>
-      <Action tone="sec" label="Marchar" disabled={(!to || men < 50) && 'escolha destino e homens'} onClick={() => act(g => moveTroops(g, p.id, to as Id, count), 'Tropas em marcha')}/>
+      <Action cost={1} tone="sec" label="Marchar" disabled={(!to || men < 50) && 'escolha destino e homens'} onClick={() => act(g => withOrder(g, g => moveTroops(g, p.id, to as Id, count), 1), 'Tropas em marcha')}/>
     </Section>}
   </>
 }
@@ -240,7 +274,7 @@ function ForeignMilitary({ game, p, act }: { game: GameState; p: Province; act: 
       <div className={styles.moveRow}><span>Homens</span><input type="range" min={50} max={Math.max(50, men)} step={25} value={count} onChange={e => setCount(+e.target.value)} aria-label="Homens para a campanha"/><b>{count}</b></div>
       <p className={styles.small}>Recomendado: {q.recommended}. Você tem {men} em Pontevela.</p>
       <div className={styles.acts}>
-        <Action tone="war" label={`Marchar contra ${p.name}`} detail={`${count} homens`} disabled={(men < 50 || q.route.length < 2) && (q.route.length < 2 ? 'sem caminho' : 'homens insuficientes')} onClick={() => act(g => attack(g, seat, p.id, Math.min(count, g.campaign.garrisons[seat] ?? 0)), 'Marcha de guerra')}/>
+        <Action cost={1} tone="war" label={`Marchar contra ${p.name}`} detail={`${count} homens`} disabled={(men < 50 || q.route.length < 2) && (q.route.length < 2 ? 'sem caminho' : 'homens insuficientes')} onClick={() => act(g => withOrder(g, g => attack(g, seat, p.id, Math.min(count, g.campaign.garrisons[seat] ?? 0)), 1), 'Marcha de guerra')}/>
         <Action tone="sec" label="Ver o plano de conquista" onClick={() => ui.openSheet({ kind: 'plan', provinceId: p.id, path: 0 })}/>
       </div>
     </>}
@@ -263,7 +297,7 @@ function SpyMission({ game, p, kind, act }: { game: GameState; p: Province; kind
   const free = game.campaign.agents.filter(a => a.hired && !game.campaign.spyMissions.some(m => m.agentId === a.id && !m.completed))
   const q = spyQuote(game, p.id, kind)
   const label = kind === 'reivindicação' ? 'Fabricar reivindicação' : kind === 'segredo' ? 'Buscar um segredo' : 'Investigar a província'
-  return <Action tone="sec" label={label} detail={`espião · ${q.gold} ouro · ${q.days} dias`} disabled={!free.length ? 'contrate um agente (sua província, Influência)' : !q.route.length && 'sem rota conhecida'} onClick={() => act(g => sendSpy(g, free[0].id, p.id, kind), 'Agente enviado')}/>
+  return <Action cost={1} tone="sec" label={label} detail={`espião · ${q.gold} ouro · ${q.days} dias`} disabled={!free.length ? 'contrate um agente (sua província, Influência)' : !q.route.length && 'sem rota conhecida'} onClick={() => act(g => withOrder(g, g => sendSpy(g, free[0].id, p.id, kind), 1), 'Agente enviado')}/>
 }
 function ForeignInfluence({ game, p, act }: { game: GameState; p: Province; act: Act }) {
   const house = houseOf(game, p.governingHouseId), I = BALANCE.influence
@@ -275,11 +309,11 @@ function ForeignInfluence({ game, p, act }: { game: GameState; p: Province; act:
     <div className={styles.meterRow}><span>influência</span><span className={styles.meter}><i style={{ width: `${inf}%` }}/><em style={{ left: `${I.oathThreshold}%` }}/></span><b>{inf}%</b></div>
     <p className={styles.small}>{bond ? `Laço: ${bond.text}` : 'Sem laço ainda: dívida, segredo ou casamento.'}</p>
     <div className={styles.acts}>
-      {oathReady(game, house.id) && <Action label="Convidar ao juramento" detail="cerimônia de vassalagem" onClick={() => act(g => proposeOath(g, house.id))}/>}
-      <Action tone="sec" label="Oferecer um banquete" detail={`${I.banquet.gold} ouro · ${I.banquet.food} grãos · +${I.banquet.gain}%`} disabled={wait('banquete', I.banquet.cooldown)} onClick={() => act(g => influenceAction(g, house.id, 'banquete'), 'Banquete')}/>
-      <Action tone="sec" label="Patrocinar a corte" detail={`${I.patronage.silver} prata · +${I.patronage.gain}%`} disabled={wait('patrocínio', I.patronage.cooldown)} onClick={() => act(g => influenceAction(g, house.id, 'patrocínio'), 'Patrocínio')}/>
-      {debt && <Action tone="sec" label={`Comprar a dívida (${fmt(debt.amount)} ouro)`} detail={`deve à ${debt.creditor}`} onClick={() => act(g => influenceAction(g, house.id, 'dívida'), 'Dívida comprada')}/>}
-      <Action tone="sec" label="Propor casamento" detail={`${I.marriage.renown} renome · exige relação +${I.marriage.relation}`} disabled={relationWith(game, house.id) < I.marriage.relation && `relação ${relationWith(game, house.id)}`} onClick={() => act(g => influenceAction(g, house.id, 'casamento'), 'Promessa de casamento')}/>
+      {oathReady(game, house.id) && <Action cost={orderCost(game, house.id)} label="Convidar ao juramento" detail="cerimônia de vassalagem" onClick={() => act(g => withOrder(g, g => proposeOath(g, house.id), orderCost(game, house.id)))}/>}
+      <Action cost={orderCost(game, house.id)} tone="sec" label="Oferecer um banquete" detail={`${I.banquet.gold} ouro · ${I.banquet.food} grãos · +${I.banquet.gain}%`} disabled={wait('banquete', I.banquet.cooldown)} onClick={() => act(g => withOrder(g, g => influenceAction(g, house.id, 'banquete'), orderCost(game, house.id)), 'Banquete')}/>
+      <Action cost={orderCost(game, house.id)} tone="sec" label="Patrocinar a corte" detail={`${I.patronage.silver} prata · +${I.patronage.gain}%`} disabled={wait('patrocínio', I.patronage.cooldown)} onClick={() => act(g => withOrder(g, g => influenceAction(g, house.id, 'patrocínio'), orderCost(game, house.id)), 'Patrocínio')}/>
+      {debt && <Action cost={orderCost(game, house.id)} tone="sec" label={`Comprar a dívida (${fmt(debt.amount)} ouro)`} detail={`deve à ${debt.creditor}`} onClick={() => act(g => withOrder(g, g => influenceAction(g, house.id, 'dívida'), orderCost(game, house.id)), 'Dívida comprada')}/>}
+      <Action cost={orderCost(game, house.id)} tone="sec" label="Propor casamento" detail={`${I.marriage.renown} renome · exige relação +${I.marriage.relation}`} disabled={relationWith(game, house.id) < I.marriage.relation && `relação ${relationWith(game, house.id)}`} onClick={() => act(g => withOrder(g, g => influenceAction(g, house.id, 'casamento'), orderCost(game, house.id)), 'Promessa de casamento')}/>
       <SpyMission game={game} p={provinceOf(game, house.seatProvinceId)} kind="segredo" act={act}/>
       {knowledge(game, p.id) < 3 && <SpyMission game={game} p={p} kind="investigar" act={act}/>}
     </div>

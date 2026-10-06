@@ -4,8 +4,6 @@ import { COLORS } from '../engine/heraldry'
 import { hash } from '../engine/random'
 import { knowledge } from '../engine/knowledge'
 import { controlled, isVassal } from '../engine/stateUtils'
-import { dateFromDay } from '../engine/calendar'
-import { routeDays } from '../engine/military'
 
 /** Heraldry for every house: the player's chosen arms, authored arms for Três Pontes, derived arms elsewhere. */
 const AUTHORED: Record<string, Heraldry> = {
@@ -37,30 +35,39 @@ export const provinceOf = (g: GameState, id: Id) => g.world.provinces.find(p => 
 export const rulerFigure = (g: GameState, houseId: Id) => g.campaign.characters.find(c => c.id === `ruler-${houseId}`)
 export const assetUrl = (file: string) => `${import.meta.env.BASE_URL}${file}`
 
-/** What is coming: every scheduled arrival in the campaign, for the timeline. */
-export interface Pin { day: number; kind: string; text: string; tone: 'gold' | 'teal' | 'green' | 'red' | 'grey'; provinceId: Id | null }
-export function upcoming(g: GameState): Pin[] {
-  const pins: Pin[] = []
-  const name = (id: Id) => knowledge(g, id) >= 2 ? provinceOf(g, id).name : 'terra avistada'
-  for (const e of g.campaign.expeditions) if (!e.completed) pins.push({ day: e.endDay, kind: 'batedores', text: `voltam de ${name(e.provinceId)}`, tone: 'teal', provinceId: e.provinceId })
-  for (const i of g.campaign.investments) if (!i.completed) pins.push({ day: i.endDay, kind: 'obra', text: `conclusão em ${provinceOf(g, i.provinceId).name}`, tone: 'green', provinceId: i.provinceId })
-  for (const d of g.campaign.diplomacy) if (!d.completed) pins.push({ day: d.endDay, kind: 'emissário', text: `chega a ${name(d.provinceId)}`, tone: 'gold', provinceId: d.provinceId })
-  for (const n of g.campaign.negotiations) if (n.status === 'aguardando') pins.push({ day: n.replyDay, kind: 'resposta', text: houseOf(g, n.houseId).name, tone: 'gold', provinceId: houseOf(g, n.houseId).seatProvinceId })
-  for (const m of g.campaign.spyMissions) if (!m.completed) pins.push({ day: m.endDay, kind: 'espião', text: `volta de ${name(m.provinceId)}`, tone: 'grey', provinceId: m.provinceId })
-  const t = g.campaign.travel
-  if (t) pins.push(t.arrived ? { day: t.returnDay, kind: 'Irian', text: 'volta para casa', tone: 'gold', provinceId: null } : { day: t.arriveDay, kind: 'Irian', text: `chega a ${name(t.provinceId)}`, tone: 'gold', provinceId: t.provinceId })
-  for (const a of g.campaign.armies) {
-    const mine = a.houseId === g.playerHouseId, target = provinceOf(g, a.targetProvinceId)
-    if (a.status === 'marchando') pins.push({ day: a.nextStepDay + routeDays(g, a.route.slice(a.step + 1)), kind: mine ? 'tropas' : 'inimigo', text: `${a.order === 'atacar' ? 'cercam' : 'chegam a'} ${target.name}`, tone: mine ? 'gold' : 'red', provinceId: target.id })
-    if (a.status === 'sitiando' && a.siegeEndDay) pins.push({ day: a.siegeEndDay, kind: mine ? 'assalto' : 'ataque', text: `às muralhas de ${target.name}`, tone: 'red', provinceId: target.id })
+/** A figure standing on the map: Irian with his retinue, or a lord at his seat or on the road. */
+export interface LordToken { houseId: Id; characterId: Id; provinceId: Id; men: number | null; riding: boolean; me: boolean }
+export function lordTokens(g: GameState): LordToken[] {
+  const tokens: LordToken[] = []
+  const me = g.campaign.parties.find(p => p.id === 'party-player')
+  if (me) tokens.push({ houseId: g.playerHouseId, characterId: `ruler-${g.playerHouseId}`, provinceId: me.provinceId, men: me.men, riding: me.provinceId !== houseOf(g, g.playerHouseId).seatProvinceId, me: true })
+  for (const h of g.world.houses) {
+    if (h.id === g.playerHouseId || isVassal(g, h.id) || g.campaign.prisoners.some(p => p.houseId === h.id)) continue
+    const party = g.campaign.parties.find(p => p.kind === 'lorde' && p.houseId === h.id)
+    const at = party?.provinceId ?? (provinceOf(g, h.seatProvinceId).governingHouseId === h.id ? h.seatProvinceId : null)
+    if (at && knowledge(g, at) >= 2) tokens.push({ houseId: h.id, characterId: `ruler-${h.id}`, provinceId: at, men: party ? party.men : null, riding: Boolean(party) && party!.provinceId !== h.seatProvinceId, me: false })
   }
-  const nextMonth = Math.ceil((g.day + 1) / 30) * 30
-  pins.push({ day: nextMonth, kind: 'balanço', text: 'renda do mês', tone: 'green', provinceId: null })
-  const liege = g.world.provinces.find(p => p.id === houseOf(g, g.playerHouseId).seatProvinceId)!.liegeHouseId
-  if (liege !== g.world.realms.find(r => r.id === houseOf(g, g.playerHouseId).realmId)?.royalHouseId) pins.push({ day: Math.ceil((g.day + 1) / 90) * 90, kind: 'tributo', text: `a ${houseOf(g, liege).name.replace('Casa ', '')}`, tone: 'grey', provinceId: null })
-  const winter = (() => { const d = dateFromDay(g.day); const y = Math.floor(g.day / 360); const w = y * 360 + 270; return d.season === 'Inverno' ? w + 360 : w })()
-  pins.push({ day: winter, kind: 'inverno', text: 'celeiros precisam de sal', tone: 'grey', provinceId: null })
-  return pins.filter(p => p.day > g.day).sort((a, b) => a.day - b.day)
+  return tokens
 }
 /** Large figure for cards, conversations and scenes (the map uses the light version). */
 export const cardUrl = (file: string) => assetUrl(file.replace('assets/lords/', 'assets/lords/card/'))
+
+/** The journal: what deserves Irian's attention now, most urgent first. Read-only view of the state. */
+export interface Goal { text: string; detail: string; provinceId: Id | null; tone: 'red' | 'gold' | 'teal' | 'green' }
+export function goals(g: GameState): Goal[] {
+  const out: Goal[] = [], mine = controlled(g), me = g.campaign.parties.find(p => p.id === 'party-player')
+  const name = (id: Id) => knowledge(g, id) >= 2 ? provinceOf(g, id).name : 'terras avistadas'
+  const band = (n: string) => n.replace(/^O/, 'o')
+  for (const b of g.campaign.parties) if (b.kind === 'bandidos' && mine.some(p => p.id === b.provinceId)) out.push({ text: `Expulse ${band(b.name)}`, detail: `${b.men} salteadores saqueiam ${name(b.provinceId)}`, provinceId: b.provinceId, tone: 'red' })
+  for (const a of g.campaign.armies) if (a.houseId !== g.playerHouseId && mine.some(p => p.id === a.targetProvinceId)) out.push({ text: `Defenda ${name(a.targetProvinceId)}`, detail: `${houseOf(g, a.houseId).name} marcha com ${a.men} homens`, provinceId: a.targetProvinceId, tone: 'red' })
+  for (const q of g.campaign.quests) if (!q.done) { const b = g.campaign.parties.find(p => p.id === q.partyId); if (b) out.push({ text: `Destrua ${band(b.name)}`, detail: `pedido da ${houseOf(g, q.houseId).name}: +${q.gold} ouro, +${q.influence} influência`, provinceId: b.provinceId, tone: 'gold' }) }
+  if (me && me.men < 30 && mine.some(p => (g.campaign.garrisons[p.id] ?? 0) > 50)) out.push({ text: 'Reforce a comitiva', detail: `Irian tem só ${me.men} homens: leve-o a uma província sua e traga homens da guarnição`, provinceId: me.provinceId, tone: 'teal' })
+  const unmet = g.world.houses.filter(h => h.id !== g.playerHouseId && !isVassal(g, h.id) && provinceOf(g, h.seatProvinceId).fiefId === provinceOf(g, houseOf(g, g.playerHouseId).seatProvinceId).fiefId && !g.campaign.contacts.some(c => c.houseId === h.id && c.establishedDay !== null))
+  for (const h of unmet.slice(0, 1)) out.push({ text: `Visite a ${h.name}`, detail: 'Leve a comitiva até o lorde para abrir contato', provinceId: h.seatProvinceId, tone: 'teal' })
+  // The road to grand lord: the house closest to swearing.
+  const fief = provinceOf(g, houseOf(g, g.playerHouseId).seatProvinceId).fiefId
+  const courted = g.world.houses.filter(h => h.id !== g.playerHouseId && !isVassal(g, h.id) && provinceOf(g, h.seatProvinceId).fiefId === fief && g.campaign.contacts.some(c => c.houseId === h.id && c.establishedDay !== null))
+    .sort((a, b) => (g.campaign.influence[b.id] ?? 0) - (g.campaign.influence[a.id] ?? 0))[0]
+  if (courted) out.push({ text: `Conquiste a ${courted.name}`, detail: `influência ${g.campaign.influence[courted.id] ?? 0}% · pela espada, por tratado ou pela corte`, provinceId: courted.seatProvinceId, tone: 'green' })
+  return out
+}

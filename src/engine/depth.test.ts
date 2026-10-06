@@ -97,7 +97,8 @@ describe('conquista mais dura', () => {
     const old = structuredClone(g); old.campaign.revision = 2
     for (const k of ['admin', 'nextEventDay', 'eventLog', 'wars', 'conditions']) delete old.campaign[k]
     const migrated = migrateGame(old as never)
-    expect(migrated.campaign.revision).toBe(3)
+    expect(migrated.campaign.revision).toBe(4)
+    expect(migrated.campaign.parties.length).toBeGreaterThan(1)
     expect(migrated.campaign.wars).toEqual([])
     expect(migrated.day).toBe(5)
     expect(migrated.campaign.notifications.length).toBe((g.campaign.notifications as unknown[]).length)

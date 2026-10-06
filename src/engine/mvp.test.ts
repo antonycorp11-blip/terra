@@ -13,6 +13,7 @@ import { converse, dialogueWait } from './dialogue'
 import { canConverse, rulerOf } from './characters'
 import { migrateGame } from './persistence'
 import { BALANCE } from './balance'
+import { lordLocation, playerParty } from './party'
 import type { GameState } from './types'
 
 const base = createGame()
@@ -31,7 +32,10 @@ function contactOne(g: GameState, index = 0) {
   const { game, target } = exploreOne(g, index)
   const sent = sendEmissary(game, target)
   const done = advanceGame(sent, sent.campaign.diplomacy.at(-1)!.endDay - sent.day)
-  return { game:done, target, houseId:done.world.provinces.find(p => p.id === target)!.governingHouseId }
+  const houseId = done.world.provinces.find(p => p.id === target)!.governingHouseId
+  // Conversations happen in person: the retinue stands where the lord is.
+  playerParty(done).provinceId = lordLocation(done, houseId)!
+  return { game:done, target, houseId }
 }
 
 describe('criação da casa do jogador', () => {

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { createGame } from '../engine/world'
-import { advanceGame } from '../engine/simulation'
 import { customizeHouse } from '../engine/houseCustomization'
 import { deleteSave, listSaves, loadGame, saveGame, type SaveSlot } from '../engine/persistence'
 import type { Heraldry } from '../engine/mvpTypes'
@@ -12,7 +11,6 @@ import { longDate, type Act } from './parts'
 import styles from './App.module.css'
 
 type Screen = 'title' | 'creation' | 'game'
-const SPEED_DELAY = { 1: 1100, 2: 420, 3: 130 } as const
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>('title')
@@ -26,23 +24,10 @@ export default function App() {
   // Single source of truth for sequencing player actions and time ticks without losing either.
   const gameRef = useRef<GameState | null>(null)
   const setGame = (next: GameState) => { gameRef.current = next; setGameState(next) }
-  const blocked = Boolean(game?.campaign.decisions.some(d => !d.resolved)) || ui.sheet?.kind === 'battle' || ui.sheet?.kind === 'menu'
 
   useEffect(() => { listSaves().then(list => setHasAutosave(list.some(s => s.slot === 'autosave'))).catch(() => {}) }, [])
-  useEffect(() => {
-    if (!game || game.speed === 0 || blocked) return
-    const interval = window.setInterval(() => {
-      const previous = gameRef.current!
-      let next = advanceGame(previous)
-      const fresh = next.campaign.notifications.slice(previous.campaign.notifications.length)
-      // Pause only for results that open decisions or demand attention; routine news stays in the chronicle.
-      if (fresh.some(n => n.important)) next = { ...next, speed: 0 }
-      if (fresh.length) { const latest = fresh.find(n => n.important) ?? fresh.at(-1)!; setNotice({ title: latest.title, text: latest.text, provinceId: latest.provinceId, important: Boolean(latest.important) }) }
-      setGame(next)
-    }, SPEED_DELAY[game.speed])
-    return () => window.clearInterval(interval)
-  }, [game?.speed, blocked, screen]) // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (game && game.day > 0 && game.day % 30 === 0) saveGame('autosave', game).catch(() => setNotice({ title: 'Salvamento', text: 'Falha no salvamento automático.' })) }, [game?.day]) // eslint-disable-line react-hooks/exhaustive-deps
+  // The game is played in turns: every new turn is saved.
+  useEffect(() => { if (game && game.campaign.turn > 1) saveGame('autosave', game).catch(() => setNotice({ title: 'Salvamento', text: 'Falha no salvamento automático.' })) }, [game?.campaign.turn]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const act: Act = (action, success) => {
     if (!gameRef.current) return
@@ -65,7 +50,7 @@ export default function App() {
       const founded = customizeHouse(base!, { name, heraldry })
       ui.reset(); setGame(founded); setScreen('game'); setBase(null)
       saveGame('autosave', founded).then(() => setHasAutosave(true)).catch(() => {})
-      setNotice({ title: `${founded.world.houses.find(h => h.id === founded.playerHouseId)!.name} foi fundada`, text: 'Pontevela é sua. Toque nos territórios e troque as visões no canto inferior.' })
+      setNotice({ title: `${founded.world.houses.find(h => h.id === founded.playerHouseId)!.name} foi fundada`, text: 'Toque em Irian para mover a comitiva. Quando terminar, encerre o turno.', important: true })
     } catch (error) { setNotice({ title: 'Não foi possível', text: error instanceof Error ? error.message : 'Não foi possível fundar a casa.', error: true }) }
   }
   async function doLoad(slot: string) {

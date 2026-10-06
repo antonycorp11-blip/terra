@@ -9,6 +9,7 @@ import { rulerOf } from './characters'
 import { PORTRAITS } from './portraits'
 import { castleOf, defenders, enemyArmy, resolveBattle } from './military'
 import { adminOf } from './economy'
+import { resolvePrisoner } from './party'
 
 const E = BALANCE.events, W = BALANCE.world
 const roll = (g: GameState, key: string) => hash(`${g.world.seed}:${g.day}:${key}`)
@@ -176,6 +177,8 @@ export function resolveEvent(g: GameState, d: Decision, choice: string) {
     case 'sucessao:apoiar': pay(g, { gold: 100 }); g.campaign.politics.liegeThreat = clamp(g.campaign.politics.liegeThreat - 25, 0, 100); rel(15); result = `${rulerOf(g, hid!).name} não esquece quem o apoiou. Ameaça −25.`; break
     case 'sucessao:pretendente': pay(g, { renown: 10 }); other!.mobilizable = Math.round(other!.mobilizable * .55); inf(20); g.campaign.politics.liegeThreat = clamp(g.campaign.politics.liegeThreat + 15, 0, 100); result = `A ${other!.name} se divide entre irmãos. Metade dos homens deles não responde mais ao novo grão-lorde.`; break
     case 'sucessao:neutro': result = 'Sua casa observa de longe.'; break
+    case 'marco:seguir': result = 'Que os bardos cantem.'; break
+    default: if (ev.key === 'prisioneiro') result = resolvePrisoner(g, d, choice)
   }
   d.choice = choice
   notify(g, ev.title, result, d.provinceId)

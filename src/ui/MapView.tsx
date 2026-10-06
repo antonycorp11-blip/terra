@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { MAP_HEIGHT, MAP_WIDTH } from '../engine/geography'
 import type { GameState, Id, Province, Resource } from '../engine/types'
 import { armyPosition, defenders } from '../engine/military'
@@ -8,13 +8,31 @@ import { knowledge } from '../engine/knowledge'
 import type { TerrainResult } from './map/terrainWorker'
 import { bordersOf, labelSize } from './map/geometry'
 import { resourceImage } from './map/canvasIcons'
-import { assetUrl, heraldryOf, houseOf, mapColor, provinceOf, rulerFigure } from './view'
+import { assetUrl, heraldryOf, houseOf, lordTokens, mapColor, provinceOf, rulerFigure } from './view'
+import Icon from './Icons'
 import type { Lens } from './store'
 import Crest from './Heraldry'
 import styles from './MapView.module.css'
 
 const W = MAP_WIDTH, H = MAP_HEIGHT
-interface Props { game: GameState; lens: Lens; selectedId: Id | null; resourceFilter: string | null; focus: { provinceId: Id; nonce: number } | null; onSelect: (id: Id | null) => void }
+interface Props {
+  game: GameState; lens: Lens; selectedId: Id | null; resourceFilter: string | null; focus: { provinceId: Id; nonce: number } | null; onSelect: (id: Id | null) => void
+  /** Provinces Irian's retinue can reach this turn (shown as gold markers), or null when the retinue is not selected. */
+  reach: Map<Id, number> | null; onMove: (id: Id) => void; onParty: () => void; onBand: (partyId: Id, provinceId: Id) => void
+}
+/**
+ * A token that walks: when its province changes, it glides from the old spot to the new one.
+ * Panning the map moves it instantly (only a change of province animates).
+ */
+function Walker({ id, at, x, y, className, style, children, onClick, label }: { id: string; at: Id; x: number; y: number; className: string; style?: Record<string, string | number>; children: ReactNode; onClick?: () => void; label?: string }) {
+  const el = useRef<HTMLButtonElement>(null), last = useRef<{ at: Id; x: number; y: number } | null>(null)
+  useLayoutEffect(() => {
+    const prev = last.current; last.current = { at, x, y }
+    if (!prev || prev.at === at || !el.current?.animate) return
+    el.current.animate([{ translate: `${prev.x - x}px ${prev.y - y}px` }, { translate: '0 0' }], { duration: 900, easing: 'cubic-bezier(.45,.05,.3,1)' })
+  }, [at, x, y])
+  return <button ref={el} type="button" data-ui data-token={id} className={className} style={{ left: x, top: y, ...style }} onClick={onClick} aria-label={label}>{children}</button>
+}
 
 /* ---------- terrain (worker, two passes: quick, then sharp) ---------- */
 interface Terrain { raster: HTMLCanvasElement; mask: HTMLCanvasElement; trees: Float32Array; peaks: Float32Array; rivers: Float32Array; sharp: boolean }
@@ -94,7 +112,7 @@ const scaleOf = (c: Cam) => c.base * c.k
  * pan or pinch the last frame is moved with a cheap CSS transform; once the gesture settles the
  * whole map is redrawn sharp. Lords, armies and the traveling lord stay as tappable elements.
  */
-export default function MapView({ game, lens, selectedId, resourceFilter, focus, onSelect }: Props) {
+export default function MapView({ game, lens, selectedId, resourceFilter, focus, onSelect, reach, onMove, onParty, onBand }: Props) {
   const box = useRef<HTMLDivElement>(null), canvas = useRef<HTMLCanvasElement>(null), hover = useRef<HTMLCanvasElement>(null), overlay = useRef<HTMLDivElement>(null)
   const pol = useRef<HTMLCanvasElement | null>(null)
   const cam = useRef<Cam>({ k: 2.6, x: 0, y: 0, base: 1, w: 1, h: 1 })
@@ -349,7 +367,6 @@ export default function MapView({ game, lens, selectedId, resourceFilter, focus,
   /* tokens, positioned from the last full render */
   const S = (pt: [number, number]): [number, number] => [pt[0] * view.s + view.x, pt[1] * view.s + view.y]
   const onScreen = ([x, y]: [number, number]) => x > -90 && x < view.w + 90 && y > -40 && y < view.h + 180
-  const seats = game.world.provinces.filter(p => knowledge(game, p.id) >= 2 && houseOf(game, p.governingHouseId).seatProvinceId === p.id)
   const castleAt = (p: Province) => game.world.settlements.find(s => s.provinceId === p.id && s.type === 'castelo')!.position
   const selected = selectedId ? provinceOf(game, selectedId) : null
   return <div ref={box} className={styles.map} role="application" aria-label="Mapa de Varedor" data-lens={lens}>
@@ -357,14 +374,30 @@ export default function MapView({ game, lens, selectedId, resourceFilter, focus,
     <canvas ref={hover} className={styles.canvas}/>
     {!terrain && <div className={styles.loading}>desenhando o relevo…</div>}
     <div ref={overlay} className={styles.tokens}>
-      {seats.map(p => ({ p, pos: S(castleAt(p)) })).filter(x => onScreen(x.pos)).sort((a, b) => a.pos[1] - b.pos[1]).map(({ p, pos }) => {
-        const ruler = rulerFigure(game, p.governingHouseId), house = houseOf(game, p.governingHouseId)
-        const active = selected?.governingHouseId === p.governingHouseId
-        return <button key={p.id} type="button" data-ui className={`${styles.lord} ${active ? styles.active : ''} ${house.id === game.playerHouseId ? styles.me : ''}`} style={{ left: pos[0], top: pos[1] }} onClick={() => onSelect(p.id)} aria-label={`${ruler?.name ?? ''} ${house.name}`}>
-          {ruler?.portraitAsset ? <img src={assetUrl(ruler.portraitAsset)} alt="" draggable={false} decoding="async"/> : <span className={styles.crestOnly}><Crest heraldry={heraldryOf(game, house)} size={30}/></span>}
-          <span className={styles.base} style={{ ['--hc' as string]: mapColor(game, house.id) }}/>
-        </button>
-      })}
+      {(() => {
+        // Several figures can share a province: spread them side by side.
+        const seen = new Map<Id, number>()
+        return lordTokens(game).map(t => { const n = seen.get(t.provinceId) ?? 0; seen.set(t.provinceId, n + 1); return { t, pos: S(castleAt(provinceOf(game, t.provinceId))), n } })
+          .filter(x => onScreen(x.pos)).sort((a, b) => a.pos[1] - b.pos[1]).map(({ t, pos, n }) => {
+            const ruler = rulerFigure(game, t.houseId), house = houseOf(game, t.houseId)
+            const active = !t.me && selected?.governingHouseId === t.houseId && selected.id === t.provinceId
+            const x = pos[0] + (n ? (n % 2 ? 1 : -1) * Math.ceil(n / 2) * 30 : 0)
+            return <Walker key={t.characterId} id={t.characterId} at={t.provinceId} x={x} y={pos[1]} className={`${styles.lord} ${active ? styles.active : ''} ${t.me ? styles.me : ''} ${t.me && reach ? styles.picked : ''}`} style={{ ['--hc']: mapColor(game, house.id) }} onClick={() => t.me ? onParty() : onSelect(t.provinceId)} label={t.me ? 'Irian e a comitiva' : `${ruler?.name ?? ''} ${house.name}`}>
+              {ruler?.portraitAsset ? <img src={assetUrl(ruler.portraitAsset)} alt="" draggable={false} decoding="async"/> : <span className={styles.crestOnly}><Crest heraldry={heraldryOf(game, house)} size={30}/></span>}
+              <span className={styles.base}/>
+              {t.men !== null && <span className={`${styles.men} ${t.me ? styles.menMine : ''}`}><Crest heraldry={heraldryOf(game, house)} size={12}/>{t.men}</span>}
+            </Walker>
+          })
+      })()}
+      {game.campaign.parties.filter(b => b.kind === 'bandidos' && knowledge(game, b.provinceId) >= 1).map(b => { const pos = S(provinceOf(game, b.provinceId).center); if (!onScreen(pos)) return null
+        const quest = game.campaign.quests.find(q => !q.done && q.partyId === b.id)
+        return <Walker key={b.id} id={b.id} at={b.provinceId} x={pos[0]} y={pos[1]} className={styles.band} onClick={() => onBand(b.id, b.provinceId)} label={`${b.name}, ${b.men} salteadores`}>
+          <Icon name="militar" size={14}/><b>{b.men}</b>{quest && <i title="recompensa">★</i>}
+        </Walker> })}
+      {reach && [...reach].map(([id, cost]) => { const pos = S(castleAt(provinceOf(game, id))); if (!onScreen(pos)) return null
+        return <button key={`reach-${id}`} type="button" data-ui className={styles.reach} style={{ left: pos[0], top: pos[1] }} onClick={() => onMove(id)} aria-label={`Levar a comitiva para ${knowledge(game, id) >= 2 ? provinceOf(game, id).name : 'terra avistada'}`}>
+          <span>{cost}</span>
+        </button> })}
       {controlled(game).filter(p => p.id !== houseOf(game, game.playerHouseId).seatProvinceId).map(p => ({ p, pos: S(castleAt(p)) })).filter(x => onScreen(x.pos)).map(({ p, pos }) =>
         <button key={`banner-${p.id}`} type="button" data-ui className={styles.banner} style={{ left: pos[0], top: pos[1] }} onClick={() => onSelect(p.id)} aria-label={`${p.name}, sua província`}>
           <span className={styles.flag}><Crest heraldry={game.campaign.customization.heraldry} size={22}/></span><span className={styles.pole}/>
@@ -372,8 +405,6 @@ export default function MapView({ game, lens, selectedId, resourceFilter, focus,
       {game.campaign.armies.map(a => { const pos = S(armyPosition(game, a)), mineArmy = a.houseId === game.playerHouseId, house = houseOf(game, a.houseId); return <div key={a.id} className={`${styles.army} ${mineArmy ? styles.armyMine : styles.armyFoe}`} style={{ left: pos[0], top: pos[1] }}>
         <Crest heraldry={heraldryOf(game, house)} size={18}/><span>{a.men}{a.status === 'sitiando' ? ' · cerco' : a.status === 'pronto' ? ' · pronto' : ''}</span>
       </div> })}
-      {game.campaign.travel && (() => { const t = game.campaign.travel!, from = provinceOf(game, t.route[0]).center, to = provinceOf(game, t.provinceId).center; const f = t.arrived ? Math.max(0, 1 - (game.day - t.arriveDay) / Math.max(1, t.returnDay - t.arriveDay)) : Math.min(1, (game.day - t.startDay) / Math.max(1, t.arriveDay - t.startDay)); const ruler = rulerFigure(game, game.playerHouseId)!; const pos = S([from[0] + (to[0] - from[0]) * f, from[1] + (to[1] - from[1]) * f])
-        return <div className={`${styles.lord} ${styles.traveling}`} style={{ left: pos[0], top: pos[1] }}>{ruler.portraitAsset && <img src={assetUrl(ruler.portraitAsset)} alt="" draggable={false}/>}<span className={styles.tag}>Irian em viagem</span></div> })()}
     </div>
   </div>
 }

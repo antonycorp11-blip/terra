@@ -23,7 +23,8 @@ export function defenders(g: GameState, p: Province): number {
   const house = g.world.houses.find(h => h.id === p.governingHouseId)!
   const castle = g.world.settlements.filter(s => s.provinceId === p.id).reduce((s, x) => s + x.garrison, 0)
   const levy = house.seatProvinceId === p.id ? Math.round(house.mobilizable * (house.rank === 'provincial' ? .6 : .35)) : 0
-  return castle + levy
+  // A house whose lord is your prisoner defends itself worse.
+  return Math.round((castle + levy) * (g.campaign.prisoners.some(x => x.houseId === house.id) ? BALANCE.prisoner.captiveDefense : 1))
 }
 export const hopDays = (p: Province) => M.hopDays + (M.terrainHop[p.terrain] ?? 0)
 /** Land route; every stop before the target must be in the player's realm or already explored. */

@@ -18,9 +18,23 @@
 .map[data-zoom="far"] .banner .pole{height:8px}
 .me img{filter:drop-shadow(0 0 4px rgba(241,207,115,.85)) drop-shadow(0 3px 3px rgba(0,0,0,.55))}
 .crestOnly{display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
-.traveling img{height:52px}
 .tag{font:700 10px 'Alegreya Sans SC',sans-serif;letter-spacing:.05em;color:#ffe3a0;background:#3b2a08;padding:1px 6px;border-radius:3px;white-space:nowrap}
 .army{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:3px;padding:2px 6px 2px 3px;border-radius:12px;font:700 11px 'Alegreya Sans SC',sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.5)}
 .armyMine{background:#2b2208;color:#ffe3a0;border:1px solid #f1cf73}
 .armyFoe{background:#4a130d;color:#ffd5c9;border:1px solid #ff6a52}
 @media (max-height:520px){.lord img{height:52px}.map[data-zoom="far"] .lord img{height:34px}.map[data-zoom="near"] .lord img{height:78px}}
+
+/* Retinues on the road: the escort's size under the figure. */
+.men{display:flex;align-items:center;gap:2px;margin-top:-2px;font:700 10px 'Alegreya Sans SC',sans-serif;color:#f3e7c9;background:rgba(14,16,16,.85);border:1px solid rgba(255,255,255,.18);border-radius:8px;padding:0 5px 0 2px;white-space:nowrap}
+.menMine{border-color:#f1cf73;color:#ffe3a0}
+.picked img{filter:drop-shadow(0 0 8px rgba(255,220,130,.95)) drop-shadow(0 3px 3px rgba(0,0,0,.55))}
+.picked .base{width:44px;height:12px;background:radial-gradient(ellipse,rgba(255,220,130,.9) 0,transparent 70%)}
+/* Outlaws: a red war-band marker. */
+.band{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:3px;padding:3px 8px 3px 5px;border-radius:12px;background:#3a0f0b;color:#ffd5c9;border:1px solid #ff6a52;font:700 12px 'Alegreya Sans SC',sans-serif;pointer-events:auto;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.55);animation:prowl 2.4s ease-in-out infinite}
+.band i{font-style:normal;color:#ffd166}
+@keyframes prowl{50%{box-shadow:0 0 0 4px rgba(255,106,82,.25),0 2px 8px rgba(0,0,0,.55)}}
+/* Where the retinue can go this turn. */
+.reach{position:absolute;transform:translate(-50%,-50%);width:34px;height:34px;border-radius:50%;border:2px solid #f1cf73;background:rgba(43,34,8,.72);pointer-events:auto;cursor:pointer;display:grid;place-items:center;box-shadow:0 0 0 4px rgba(241,207,115,.22),0 3px 8px rgba(0,0,0,.5);animation:beckon 1.4s ease-in-out infinite;z-index:6;padding:0}
+.reach span{font:700 13px 'Alegreya Sans SC',sans-serif;color:#ffe3a0}
+@keyframes beckon{50%{transform:translate(-50%,-50%) scale(1.12)}}
+@media (prefers-reduced-motion:reduce){.band,.reach{animation:none}}
