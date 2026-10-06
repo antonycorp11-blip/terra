@@ -18,9 +18,13 @@ export function threatTo(g: GameState, houseId: Id): string | null {
   const house = g.world.houses.find(h => h.id === houseId)!
   if (house.name === 'Casa Vasterre') return 'teme as incursões de Ardesh'
   if (house.name === 'Casa Quellan') return 'teme os cobradores da Casa Mercol'
+  if (g.campaign.wars.some(w => w.active && w.defenderId === houseId)) return 'está em guerra e precisa de aliados'
+  if (g.campaign.bonds.some(b => b.houseId === houseId && b.kind === 'dívida')) return 'deve a você e teme a cobrança'
   if (house.rank === 'provincial' && defenders(g, g.world.provinces.find(p => p.id === house.seatProvinceId)!) < 250) return 'tem poucos homens para se defender'
   return null
 }
+/** Men under arms the player needs before a house accepts vassalage by treaty: 1.5× its defenders. */
+export const vassalStrength = (g: GameState, houseId: Id) => Math.ceil(defenders(g, g.world.provinces.find(p => p.id === g.world.houses.find(h => h.id === houseId)!.seatProvinceId)!) * 1.5 / 10) * 10
 export function offersFor(g: GameState, houseId: Id): Offer[] {
   const house = g.world.houses.find(h => h.id === houseId)!, contact = g.campaign.contacts.find(c => c.houseId === houseId)
   const seat = g.world.provinces.find(p => p.id === house.seatProvinceId)!
@@ -56,6 +60,12 @@ export function negotiationBlocked(g: GameState, houseId: Id, kind: Negotiation[
   if (failed && g.day - failed.replyDay < NG.failCooldown) return `Recusaram há pouco. Espere ${NG.failCooldown - (g.day - failed.replyDay)} dias.`
   if (kind === 'aliança' && !contact.trade) return 'Uma aliança exige um pacto comercial antes.'
   if (kind === 'vassalagem' && !contact.alliance) return 'Um tratado de vassalagem exige uma aliança antes.'
+  if (kind === 'vassalagem') {
+    // A house only gives up its land to someone it needs and fears a little.
+    const need = vassalStrength(g, houseId)
+    if (!threatTo(g, houseId)) return 'Essa casa não teme nada que você possa resolver. Espere uma guerra, uma dívida ou um vizinho forte.'
+    if (menUnderArms(g) < need) return `Eles só se curvam a quem é mais forte: você precisa de ${need} homens em armas.`
+  }
   if (kind === 'comércio' && contact.trade) return 'O comércio já está aberto.'
   return null
 }

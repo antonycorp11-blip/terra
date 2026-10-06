@@ -7,13 +7,16 @@ import { knowledge, reveal } from './knowledge'
 import { notify } from './notifications'
 import { menUnderArms } from './economy'
 import { rulerOf } from './characters'
+import { workLevel } from './investments'
+import { dateFromDay } from './calendar'
 
 const M = BALANCE.military
 const byId = (g: GameState, id: Id) => g.world.provinces.find(p => p.id === id)!
 export const castleOf = (g: GameState, p: Province) => g.world.settlements.find(s => s.provinceId === p.id && (s.type === 'castelo' || s.type === 'fortaleza'))!
 /** Wall level 1–5 from the castle's defence; mountains add one. */
 export const wallLevel = (g: GameState, p: Province) => Math.min(5, Math.max(1, Math.round(castleOf(g, p).defense / 15)) + (p.terrain === 'montanha' ? 1 : 0))
-export const levyCap = (p: Province) => Math.floor(p.population * M.levyShare / 10) * 10
+/** Men a province can keep under arms: a share of its population, more with a barracks. */
+export const levyCap = (g: GameState, p: Province) => Math.floor(p.population * (M.levyShare + M.barracksShare * workLevel(g, p.id, 'barracks')) / 10) * 10
 /** Defenders a province can field: castle garrison plus the house's levy when it is the house seat. */
 export function defenders(g: GameState, p: Province): number {
   if (controlled(g).some(c => c.id === p.id)) return g.campaign.garrisons[p.id] ?? 0
@@ -44,7 +47,7 @@ export function recruit(game: GameState, provinceId: Id): GameState {
   const p = byId(game, provinceId)
   requireRule(controlled(game).some(c => c.id === provinceId), 'Só é possível recrutar nas províncias que você governa.')
   const now = game.campaign.garrisons[provinceId] ?? 0
-  requireRule(now + M.recruitBatch <= levyCap(p), `${p.name} sustenta no máximo ${levyCap(p)} homens em armas.`)
+  requireRule(now + M.recruitBatch <= levyCap(game, p), `${p.name} sustenta no máximo ${levyCap(game, p)} homens em armas (8% da população${workLevel(game, p.id, 'barracks') ? ' mais o quartel' : ''}). A população cresce com comida, lealdade e fazendas; um quartel permite mais homens.`)
   const g = editGame(game)
   pay(g, { gold: M.recruitGold, renown: M.recruitRenown, iron: M.recruitIron })
   g.campaign.garrisons[provinceId] = now + M.recruitBatch
@@ -155,10 +158,11 @@ export function assault(game: GameState, armyId: Id, tactic: Tactic): GameState 
     if (house.seatProvinceId === p.id && house.rank !== 'real') {
       a.status = 'dissolvido'
       g.campaign.decisions.push({ id: nextId(g, 'decision'), kind: 'submissão', day: g.day, provinceId: p.id, houseId: house.id, resolved: false })
-      // The victorious army returns home; part stays as escort while the oath is taken.
-      const home = controlled(g)[0]
+      // A third of the victors hold the new land; the rest march home.
+      const stay = Math.round(r.attackerLeft * .35), home = controlled(g)[0]
+      g.campaign.garrisons[p.id] = (g.campaign.garrisons[p.id] ?? 0) + stay
       const route = armyRoute(g, p.id, home.id, false)
-      if (route.length > 1) newArmy(g, g.playerHouseId, r.attackerLeft, route, 'mover'); else g.campaign.garrisons[home.id] = (g.campaign.garrisons[home.id] ?? 0) + r.attackerLeft
+      if (route.length > 1) newArmy(g, g.playerHouseId, r.attackerLeft - stay, route, 'mover'); else g.campaign.garrisons[home.id] = (g.campaign.garrisons[home.id] ?? 0) + r.attackerLeft - stay
     } else {
       p.occupyingHouseId = g.playerHouseId
       g.campaign.garrisons[p.id] = r.attackerLeft; a.status = 'dissolvido'
@@ -214,17 +218,26 @@ export function processMilitary(g: GameState) {
           if (mine) { g.campaign.garrisons[target.id] = (g.campaign.garrisons[target.id] ?? 0) + a.men; notify(g, 'Tropas chegaram', `${a.men} homens reforçam ${target.name}.`, target.id) }
           a.status = 'dissolvido'
         } else {
+          if (a.order === 'socorrer') { relieve(g, a); continue }
           a.status = 'sitiando'; a.siegeEndDay = g.day + M.siegeBaseDays + wallLevel(g, target) * M.siegeDaysPerWall
+          if (mine) sendRelief(g, target)
+          if (!mine && !controlled(g).some(c => c.id === target.id)) { if (knowledge(g, target.id) >= 1) notify(g, 'Cerco', `${g.world.houses.find(h => h.id === a.houseId)!.name} cerca ${knowledge(g, target.id) >= 2 ? target.name : 'terras avistadas'}.`, target.id); continue }
           notify(g, mine ? 'Cerco iniciado' : 'Inimigo às portas', mine ? `O cerco a ${target.name} começou. O assalto será possível em ${a.siegeEndDay - g.day} dias.` : `${g.world.houses.find(h => h.id === a.houseId)!.name} cercou ${target.name}. Reforce a guarnição antes do assalto (dia ${a.siegeEndDay}).`, target.id, !mine)
         }
       } else a.nextStepDay = g.day + hopDays(byId(g, a.route[a.step + 1]))
+    }
+    if (a.status === 'sitiando') {
+      // Disease and desertion thin every siege camp; winter doubles it.
+      const loss = Math.ceil(a.men * M.siegeAttrition * (dateFromDay(g.day).season === 'Inverno' ? 2 : 1))
+      a.men = Math.max(1, a.men - loss)
     }
     if (a.status === 'sitiando' && a.siegeEndDay !== undefined && g.day >= a.siegeEndDay) {
       if (mine) {
         a.status = 'pronto'
         g.campaign.decisions.push({ id: nextId(g, 'decision'), kind: 'assalto', day: g.day, provinceId: a.targetProvinceId, houseId: byId(g, a.targetProvinceId).governingHouseId, armyId: a.id, resolved: false })
         notify(g, 'Pronto para o assalto', `As muralhas de ${byId(g, a.targetProvinceId).name} estão cercadas. Escolha como atacar.`, a.targetProvinceId, true)
-      } else resolveDefense(g, a)
+      } else if (controlled(g).some(c => c.id === a.targetProvinceId)) resolveDefense(g, a)
+      else resolveNpcSiege(g, a)
     }
   }
   g.campaign.armies = g.campaign.armies.filter(a => a.status !== 'dissolvido')
@@ -237,13 +250,62 @@ export function armyPosition(g: GameState, a: Army): [number, number] {
   const t = Math.max(0, Math.min(1, 1 - (a.nextStepDay - g.day) / span))
   return [cur[0] + (next[0] - cur[0]) * t, cur[1] + (next[1] - cur[1]) * t]
 }
-export function enemyArmy(g: GameState, houseId: Id, men: number, from: Id, target: Id): Army | null {
+/** The liege of a besieged province sends help, unless it is the player or one of the player's vassals. */
+function sendRelief(g: GameState, target: Province) {
+  const liege = g.world.houses.find(h => h.id === target.liegeHouseId)
+  if (!liege || liege.id === g.playerHouseId || g.campaign.vassals.some(v => v.houseId === liege.id) || liege.mobilizable < 300) return
+  if (g.campaign.armies.some(a => a.order === 'socorrer' && a.targetProvinceId === target.id)) return
+  const men = Math.round(liege.mobilizable * .35)
+  const army = enemyArmy(g, liege.id, men, liege.seatProvinceId, target.id, 'socorrer')
+  if (!army) return
+  liege.mobilizable -= men
+  if (liege.id === g.world.provinces.find(x => x.id === playerHouse(g).seatProvinceId)!.liegeHouseId) g.campaign.politics.liegeThreat = clamp(g.campaign.politics.liegeThreat + 20, 0, 100)
+  notify(g, 'Socorro a caminho', `${liege.name} enviou ${men} homens para romper o cerco de ${target.name}. Chegam em ${routeDays(g, army.route)} dias: tome a cidade antes ou enfrente-os em campo.`, target.id, true)
+}
+/** A relief army reaches a siege: battle in the open field, no walls. */
+function relieve(g: GameState, relief: Army) {
+  relief.status = 'dissolvido'
+  const p = byId(g, relief.targetProvinceId), besieger = g.campaign.armies.find(a => a.houseId === g.playerHouseId && a.targetProvinceId === p.id && (a.status === 'sitiando' || a.status === 'pronto'))
+  const house = g.world.houses.find(h => h.id === relief.houseId)!
+  if (!besieger) { const castle = castleOf(g, p); castle.garrison += relief.men; return }
+  const r = resolveBattle(`${g.world.seed}:${relief.id}:${g.day}:campo`, relief.men, besieger.men, 0, 'assalto', false, p.terrain)
+  g.campaign.battles.push({ id: nextId(g, 'battle'), day: g.day, provinceId: p.id, attackerHouseId: relief.houseId, defenderHouseId: g.playerHouseId, tactic: 'assalto', attackerStart: relief.men, defenderStart: besieger.men, attackerLeft: r.attackerLeft, defenderLeft: r.victory ? Math.round(besieger.men * .3) : r.defenderLeft, wall: 0, victory: r.victory, phases: r.phases, summary: r.victory ? `O socorro da ${house.name} rompeu o cerco de ${p.name}. Seus sobreviventes recuam.` : `Seus homens derrotaram o socorro da ${house.name} diante de ${p.name}. O cerco continua.` })
+  for (const d of g.campaign.decisions) if (d.armyId === besieger.id && !d.resolved) d.resolved = true
+  if (r.victory) {
+    const left = Math.round(besieger.men * .3); besieger.status = 'dissolvido'
+    const home = controlled(g)[0], route = armyRoute(g, p.id, home.id, false)
+    if (route.length > 1 && left > 0) newArmy(g, g.playerHouseId, left, route, 'mover'); else g.campaign.garrisons[home.id] = (g.campaign.garrisons[home.id] ?? 0) + left
+    playerHouse(g).prestige = Math.max(0, playerHouse(g).prestige - M.defeatRenown)
+    castleOf(g, p).garrison += Math.round(r.attackerLeft * .5)
+  } else {
+    besieger.men = r.defenderLeft
+    playerHouse(g).prestige += M.victoryRenown
+    if (besieger.status === 'pronto') g.campaign.decisions.push({ id: nextId(g, 'decision'), kind: 'assalto', day: g.day, provinceId: p.id, houseId: p.governingHouseId, armyId: besieger.id, resolved: false })
+  }
+  syncMobilizable(g)
+  notify(g, r.victory ? 'Cerco rompido' : 'Socorro derrotado', g.campaign.battles.at(-1)!.summary, p.id, true)
+}
+/** Houses fight each other too: a siege between two other houses changes who holds the land. */
+function resolveNpcSiege(g: GameState, a: Army) {
+  a.status = 'dissolvido'
+  const p = byId(g, a.targetProvinceId), att = g.world.houses.find(h => h.id === a.houseId)!, holder = g.world.houses.find(h => h.id === (p.occupyingHouseId ?? p.governingHouseId))!
+  const def = defenders(g, p), r = resolveBattle(`${g.world.seed}:${a.id}:${g.day}:npc`, a.men, def, wallLevel(g, p), 'assalto', false, p.terrain)
+  att.mobilizable = Math.max(80, att.mobilizable - (a.men - r.attackerLeft))
+  holder.mobilizable = Math.max(80, holder.mobilizable - Math.round(def * .4))
+  if (r.victory) { p.occupyingHouseId = att.id === p.governingHouseId ? null : att.id; att.mobilizable += Math.round(r.attackerLeft * .6); castleOf(g, p).garrison = Math.round(r.attackerLeft * .4) }
+  else att.mobilizable += r.attackerLeft
+  const war = g.campaign.wars.find(w => w.active && w.attackerId === att.id)
+  if (war && r.victory) war.active = false
+  if (knowledge(g, p.id) >= 1) notify(g, r.victory ? 'Terra tomada' : 'Ataque repelido', r.victory ? `${att.name} tomou ${knowledge(g, p.id) >= 2 ? p.name : 'terras avistadas'} da ${holder.name}.` : `${holder.name} repeliu ${att.name} em ${knowledge(g, p.id) >= 2 ? p.name : 'terras avistadas'}.`, p.id)
+  record(g, r.victory ? `${att.name} tomou ${p.name} da ${holder.name}.` : `${holder.name} repeliu ${att.name} em ${p.name}.`, [att.id, holder.id, p.id])
+}
+export function enemyArmy(g: GameState, houseId: Id, men: number, from: Id, target: Id, order: Army['order'] = 'atacar'): Army | null {
   const route = (() => {
     const queue = [from], prev = new Map<Id, Id>(), seen = new Set([from])
     for (let i = 0; i < queue.length; i++) { const id = queue[i]; if (id === target) { const r = [id]; while (r[0] !== from) r.unshift(prev.get(r[0])!); return r } for (const n of byId(g, id).neighbors) if (!seen.has(n)) { seen.add(n); prev.set(n, id); queue.push(n) } }
     return [] as Id[]
   })()
   if (route.length < 2) return null
-  return newArmy(g, houseId, men, route, 'atacar')
+  return newArmy(g, houseId, men, route, order)
 }
 export { newArmy }

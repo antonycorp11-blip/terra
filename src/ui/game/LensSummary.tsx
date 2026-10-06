@@ -43,6 +43,6 @@ export default function LensSummary({ game, lens, filter, setFilter }: { game: G
     <div className={styles.rchips}><button aria-pressed={!filter} onClick={() => setFilter(null)}>todos</button>{RESOURCES.map(r => <button key={r} aria-pressed={filter === r} onClick={() => setFilter(filter === r ? null : r)}><ResourceIcon resource={r} size={14}/>{r}</button>)}</div>
     {filter ? <p><b>Quem produz {filter}:</b> {sellers(game, filter as Resource).map(h => h.name.replace('Casa ', '')).join(', ') || 'ninguém que você conheça'}.</p>
       : <p className={lacks.length ? styles.alert : ''}>{lacks.length ? `Suas terras não produzem ${lacks.join(', ')}. Toque num recurso para ver quem vende.` : 'Suas terras produzem de tudo um pouco.'}</p>}
-    <p>{game.campaign.contacts.filter(c => c.trade).length} pactos comerciais · {game.campaign.vassals.length} vassalos pagando tributo.</p>
+    <p>{game.campaign.contacts.filter(c => c.trade).length} pactos comerciais · {game.campaign.vassals.length} casas juradas a você.</p>
   </aside>
 }

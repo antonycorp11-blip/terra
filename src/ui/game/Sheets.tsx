@@ -1,20 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { GameState, Id } from '../../engine/types'
-import type { DialogueTopic, OfferKind } from '../../engine/mvpTypes'
 import type { SaveSlot } from '../../engine/persistence'
-import { BALANCE } from '../../engine/balance'
 import { ascension, fiefHouses, liegeHouse, sovereign } from '../../engine/politics'
 import { menUnderArms } from '../../engine/economy'
-import { converse, dialogueWait, TOPICS } from '../../engine/dialogue'
-import { canConverse, RACE_LABEL } from '../../engine/characters'
+import { RACE_LABEL } from '../../engine/characters'
 import { conquestPlan, PATH_LABEL } from '../../engine/plans'
-import { offersFor, propose, scoreOffer, NEGOTIATION_LABEL, threatTo } from '../../engine/negotiation'
 import { isVassal } from '../../engine/stateUtils'
 import Crest from '../Heraldry'
 import Icon from '../Icons'
 import type { Lens } from '../store'
-import { fmt, longDate, type Act } from '../parts'
-import { assetUrl, cardUrl, heraldryOf, houseOf, mapColor } from '../view'
+import { fmt, longDate } from '../parts'
+import { assetUrl, heraldryOf, houseOf, mapColor } from '../view'
 import type { SaveIO } from './GameScreen'
 import styles from './Game.module.css'
 
@@ -50,7 +46,7 @@ export function HousesSheet({ game, onClose, onPick }: { game: GameState; onClos
       <div className={styles.houseGrid}>{fief.map(h => { const v = game.campaign.vassals.find(x => x.houseId === h.id), ruler = game.campaign.characters.find(c => c.id === `ruler-${h.id}`)!, contact = game.campaign.contacts.find(c => c.houseId === h.id)
         return <button key={h.id} className={`${styles.houseTile} ${h.id === game.playerHouseId ? styles.me : ''}`} onClick={() => onPick(h.seatProvinceId)} style={{ ['--hc' as string]: mapColor(game, h.id) }}>
           {ruler.portraitAsset ? <img src={assetUrl(ruler.portraitAsset)} alt=""/> : <span className={styles.tileCrest}><Crest heraldry={heraldryOf(game, h)} size={40}/></span>}
-          <span className={styles.tileText}><b>{h.name}</b><small>{h.id === game.playerHouseId ? 'sua casa' : v ? `vassala · lealdade ${v.loyalty} · tributo ${Math.round(v.tribute * 100)}%` : h.id === liege.id ? 'seu suserano' : `${ruler.name} · ${RACE_LABEL[ruler.race].toLowerCase()} · relação ${contact ? contact.relation : '?'}`}</small></span>
+          <span className={styles.tileText}><b>{h.name}</b><small>{h.id === game.playerHouseId ? 'sua casa' : v ? `jurada a você · lealdade ${v.loyalty}` : h.id === liege.id ? 'seu suserano' : `${ruler.name} · ${RACE_LABEL[ruler.race].toLowerCase()} · relação ${contact ? contact.relation : '?'}`}</small></span>
           <Crest heraldry={heraldryOf(game, h)} size={22}/>
         </button> })}</div>
     </> : <>
@@ -61,30 +57,6 @@ export function HousesSheet({ game, onClose, onPick }: { game: GameState; onClos
         <span className={styles.track}><i style={{ width: `${r.v / max * 100}%`, background: mapColor(game, r.h.id) }}/></span><b>{fmt(r.v)}<small> {unit}</small></b>
       </button>)}</div>
     </>}
-  </Sheet>
-}
-
-/* ---------- Conversation ---------- */
-export function ConversationSheet({ game, characterId, act, onClose }: { game: GameState; characterId: Id; act: Act; onClose: () => void }) {
-  const [id, setId] = useState(characterId)
-  const c = game.campaign.characters.find(x => x.id === id)!, house = houseOf(game, c.houseId)
-  const last = game.campaign.conversations.filter(x => x.characterId === id).at(-1)
-  const court = c.houseId === game.playerHouseId ? game.campaign.characters.filter(x => x.id.startsWith('court-')) : game.campaign.characters.filter(x => x.houseId === c.houseId && !x.id.startsWith('candidate'))
-  const ring = (label: string, v: number) => { const C = 2 * Math.PI * 15, f = (v + 100) / 200; return <div className={styles.ring}><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="15" className={styles.ringBg}/><circle cx="20" cy="20" r="15" className={styles.ringV} stroke={v >= 15 ? '#86ad6f' : v >= -5 ? '#d9b45a' : '#c4553f'} strokeDasharray={C} strokeDashoffset={C * (1 - f)} transform="rotate(-90 20 20)"/></svg><b>{v > 0 ? '+' : ''}{v}</b>{label}</div> }
-  return <Sheet title={c.name} sub={`${c.role} · ${house.name} · ${RACE_LABEL[c.race]} · ${c.age} anos`} onClose={onClose} wide>
-    <div className={styles.convo}>
-      <div className={styles.convoFigure} style={{ ['--hc' as string]: mapColor(game, house.id) }}>
-        {c.portraitAsset ? <img src={cardUrl(c.portraitAsset)} alt={c.name}/> : <Crest heraldry={heraldryOf(game, house)} size={96}/>}
-        <div className={styles.rings}>{ring('confiança', c.relationship.trust)}{ring('respeito', c.relationship.respect)}{ring('amizade', c.relationship.friendship)}</div>
-        {c.second && <div className={styles.second}><b>{c.second.name}</b>, a outra consciência: amizade {c.second.relationship.friendship}, confiança {c.second.relationship.trust}</div>}
-      </div>
-      <div className={styles.convoMain}>
-        <div className={styles.traits}>{c.traits.map(t => <span key={t}>{t}</span>)}</div>
-        <div className={styles.speech}>{last ? <><p>{last.response}</p><small className={styles.fx}>{last.consequence}</small></> : <p>{c.relationship.trust < 0 ? 'Espera que você fale primeiro.' : 'Recebe você com atenção.'}</p>}{c.memory.length > 0 && <small className={styles.mem}>Lembra: {c.memory.slice(-2).map(m => m.text).join(' · ')}</small>}</div>
-        <div className={styles.chips}>{(Object.keys(TOPICS) as DialogueTopic[]).map(t => { const w = dialogueWait(game, c.id, t); return <button key={t} disabled={w > 0 || !canConverse(game, c)} onClick={() => act(g => converse(g, c.id, t))}>{TOPICS[t]}{w > 0 && <small>em {w}d</small>}</button> })}</div>
-        {court.length > 1 && <div className={styles.courtRow}><span className={styles.cardH}>{c.houseId === game.playerHouseId ? 'sua corte' : 'nesta corte'}</span>{court.map(x => <button key={x.id} aria-pressed={x.id === id} onClick={() => setId(x.id)}>{x.name}<small>{x.role}</small></button>)}</div>}
-      </div>
-    </div>
   </Sheet>
 }
 
@@ -102,39 +74,6 @@ export function PlanSheet({ game, provinceId, path, onClose, onLens }: { game: G
     </div>)}</div>
     <div className={styles.outcome}><div><b>como o mundo reage</b>{reaction}</div><div><b>próximo passo</b>{plan.level < plan.stages.length ? `${plan.next}: abra a visão ${PATH_LABEL[current]} e toque em ${p.name}.` : 'Esta casa já é sua.'}</div></div>
     <div className={styles.foot}><button className={styles.btn} onClick={() => onLens(lensFor[current])}>Ir para a visão {PATH_LABEL[current]}</button></div>
-  </Sheet>
-}
-
-/* ---------- Negotiation: the scale of offers ---------- */
-export function NegotiationSheet({ game, negotiationId, act, onClose }: { game: GameState; negotiationId: Id; act: Act; onClose: () => void }) {
-  const n = game.campaign.negotiations.find(x => x.id === negotiationId)!, house = houseOf(game, n.houseId), ruler = game.campaign.characters.find(c => c.id === `ruler-${house.id}`)!
-  const offers = offersFor(game, house.id)
-  const [picked, setPicked] = useState<OfferKind[]>(n.kind === 'comércio' ? ['comércio'] : [])
-  const score = scoreOffer(game, house.id, n.kind, picked), needed = n.needed
-  const tilt = Math.max(-18, Math.min(18, (score - needed) / 2))
-  const threat = threatTo(game, house.id)
-  const waiting = n.status === 'aguardando'
-  return <Sheet title={`${NEGOTIATION_LABEL[n.kind]} com a ${house.name}`} sub={`Rodada ${Math.min(n.round, BALANCE.negotiation.maxRounds)} de ${BALANCE.negotiation.maxRounds} · ${n.status}`} onClose={onClose} wide>
-    <div className={styles.nego}>
-      <div className={styles.scale}>
-        <svg viewBox="0 0 220 140" aria-label={`Balança: ${score} de ${needed}`}>
-          <path d="M110 18v100M80 130h60" stroke="#c9a85a" strokeWidth="4" strokeLinecap="round"/>
-          <g transform={`rotate(${-tilt} 110 22)`}><path d="M30 22h160" stroke="#e8d29a" strokeWidth="4" strokeLinecap="round"/>
-            <path d="M30 22l-18 40h36zM190 22l-18 40h36z" fill="none" stroke="#c9a85a" strokeWidth="1.5"/>
-            <ellipse cx="30" cy="64" rx="22" ry="6" fill="#d4ab52"/><ellipse cx="190" cy="64" rx="22" ry="6" fill="#8b6b2e"/>
-            <text x="30" y="88" textAnchor="middle" className={styles.scaleText}>sua oferta {score}</text><text x="190" y="88" textAnchor="middle" className={styles.scaleText}>exigem {needed}</text></g>
-        </svg>
-        <p className={score >= needed ? styles.goodTxt : styles.small}>{score >= needed ? 'A balança pende para o seu lado. Eles devem aceitar.' : `Faltam ${needed - score} pontos.`} {threat ? `A casa ${threat}.` : ''}</p>
-        {ruler.portraitAsset && <img className={styles.negoFigure} src={cardUrl(ruler.portraitAsset)} alt={ruler.name}/>}
-      </div>
-      <div>
-        <div className={styles.offers}>{offers.map(o => { const on = picked.includes(o.kind); return <button key={o.kind} className={`${styles.offer} ${on ? styles.on : ''}`} disabled={!o.available || waiting} onClick={() => setPicked(on ? picked.filter(k => k !== o.kind) : [...picked, o.kind])}>
-          <b>{o.label}</b><span>+{o.value} · {Object.entries(o.cost).map(([k, v]) => `${v} ${k === 'gold' ? 'ouro' : k === 'silver' ? 'prata' : 'renome'}`).join(', ') || 'sem custo'}</span><small>{o.why}</small>
-        </button> })}</div>
-        <div className={styles.log}>{n.log.map((l, i) => <p key={i}>{l}</p>)}</div>
-        <div className={styles.foot}>{waiting ? <p>O emissário leva a proposta. Resposta em {n.replyDay - game.day} dias.</p> : n.status === 'aceita' ? <p className={styles.goodTxt}>Acordo fechado.</p> : n.status === 'recusada' ? <p>Negociação encerrada.</p> : <button className={styles.btn} onClick={() => act(g => propose(g, n.id, picked), 'Proposta enviada')}>Enviar proposta</button>}</div>
-      </div>
-    </div>
   </Sheet>
 }
 

@@ -2,8 +2,8 @@ import { useState, type ReactNode } from 'react'
 import type { GameState, Id, Province, Resource } from '../../engine/types'
 import { RESOURCES } from '../../engine/types'
 import { BALANCE } from '../../engine/balance'
-import { provinceProduction, provinceUpkeep } from '../../engine/economy'
-import { startInvestment } from '../../engine/investments'
+import { adminOf, conditionOf, governorCandidates, provinceBalance, setGovernor, setTax } from '../../engine/economy'
+import { startInvestment, workInProgress, workQuote, mineYield } from '../../engine/investments'
 import { canExplore, expeditionQuote, sendExpedition } from '../../engine/exploration'
 import { startTravel, travelQuote, sellers, purchaseQuote, buyResource } from '../../engine/travel'
 import { canConverse, RACE_LABEL, rulerOf } from '../../engine/characters'
@@ -16,12 +16,12 @@ import { conquestPlan, PATH_LABEL } from '../../engine/plans'
 import { disposition } from '../../engine/relationships'
 import { controlled, inPlayerRealm, isVassal } from '../../engine/stateUtils'
 import { knowledge } from '../../engine/knowledge'
-import type { Negotiation } from '../../engine/mvpTypes'
+import type { InvestmentKind, Negotiation, TaxLevel } from '../../engine/mvpTypes'
 import Crest from '../Heraldry'
 import Icon, { ResourceIcon } from '../Icons'
 import { useUI, type Lens } from '../store'
 import { fmt, signed, type Act } from '../parts'
-import { cardUrl, heraldryOf, houseOf, levelOf, provinceOf } from '../view'
+import { cardUrl, heraldryOf, houseOf, levelOf, mapColor, provinceOf } from '../view'
 import styles from './Game.module.css'
 
 interface Props { game: GameState; provinceId: Id; lens: Lens; act: Act; onClose: () => void }
@@ -39,8 +39,11 @@ export default function ProvinceCard({ game, provinceId, lens, act, onClose }: P
   const ui = useUI()
   const p = provinceOf(game, provinceId), level = levelOf(game, p.id)
   const mine = controlled(game).some(c => c.id === p.id)
-  const house = houseOf(game, p.governingHouseId), fief = game.world.fiefs.find(f => f.id === p.fiefId)!, realm = game.world.realms.find(r => r.id === p.realmId)!
+  const house = houseOf(game, p.occupyingHouseId ?? p.governingHouseId), fief = game.world.fiefs.find(f => f.id === p.fiefId)!, realm = game.world.realms.find(r => r.id === p.realmId)!
   const ruler = rulerOf(game, house.id)
+  // In your own land the figure is whoever governs it for you, or Irian himself.
+  const governor = mine ? game.campaign.characters.find(c => c.id === adminOf(game, p.id).governor) : null
+  const figure = governor?.portraitAsset ? governor : ruler
   let body: ReactNode
   if (level === 'hidden') body = <><div className={styles.k}>desconhecida</div><h4>Terra sem registro</h4><p className={styles.note}>Ninguém da sua casa esteve aqui. Explore uma terra vizinha para avistá-la.</p></>
   else if (level === 'sighted') body = <Sighted game={game} p={p} act={act}/>
@@ -51,9 +54,13 @@ export default function ProvinceCard({ game, provinceId, lens, act, onClose }: P
     {lens === 'militar' && (mine ? <OwnMilitary game={game} p={p} act={act}/> : <ForeignMilitary game={game} p={p} act={act}/>)}
     {lens === 'influencia' && (mine ? <OwnInfluence game={game} act={act}/> : <ForeignInfluence game={game} p={p} act={act}/>)}
   </>
-  return <aside className={styles.card} data-ui aria-label={`Província ${level === 'known' ? p.name : ''}`}>
+  const showFigure = level === 'known' && figure?.portraitAsset
+  return <aside className={`${styles.card} ${showFigure ? styles.withFigure : ''}`} data-ui aria-label={`Província ${level === 'known' ? p.name : ''}`}>
     <button className={styles.cx} onClick={onClose} aria-label="Fechar"><Icon name="close" size={16}/></button>
-    {level === 'known' && ruler?.portraitAsset && <img className={styles.cardFigure} src={cardUrl(ruler.portraitAsset)} alt={`${ruler.name}, ${house.name}`}/>}
+    {showFigure && <div className={styles.cardFigure} style={{ ['--hc' as string]: mapColor(game, house.id) }}>
+      <img src={cardUrl(figure!.portraitAsset!)} alt={`${figure!.name}, ${house.name}`}/>
+      <span className={styles.figureName}><b>{figure!.name}</b>{figure === governor ? 'governador' : ruler.role.toLowerCase()}</span>
+    </div>}
     <div className={styles.cardBody}>
       {level === 'known' && <div className={styles.k}>{p.name} · {fief.name} · {realm.name}</div>}
       {body}
@@ -65,6 +72,8 @@ export default function ProvinceCard({ game, provinceId, lens, act, onClose }: P
   </aside>
 }
 
+/** The house that held a province before it swore to the player. */
+const formerHouse = (game: GameState, p: Province) => { const v = game.campaign.vassals.find(x => x.provinceIds?.includes(p.id)); return v ? houseOf(game, v.houseId) : null }
 function HouseHeader({ game, p, mine }: { game: GameState; p: Province; mine: boolean }) {
   const house = houseOf(game, p.occupyingHouseId ?? p.governingHouseId), ruler = rulerOf(game, house.id)
   const rel = relationWith(game, house.id), vassal = isVassal(game, house.id)
@@ -74,7 +83,7 @@ function HouseHeader({ game, p, mine }: { game: GameState; p: Province; mine: bo
     <div>
       <h4>{house.name}{vassal && <span className={styles.vassalTag}>sua vassala</span>}</h4>
       <div className={styles.motto}>“{house.motto}”</div>
-      <div className={styles.who}>{mine ? 'Lorde Irian, seu domínio' : <>{ruler.role} <b>{ruler.name}</b> · {RACE_LABEL[ruler.race].toLowerCase()} · {ruler.age} anos</>}{occupied}</div>
+      <div className={styles.who}>{mine ? (p.id === houseOf(game, game.playerHouseId).seatProvinceId ? 'Sua sede. Irian governa daqui.' : formerHouse(game, p) ? `Tomada da ${formerHouse(game, p)!.name}. Agora governada por você.` : 'Seu domínio.') : <>{ruler.role} <b>{ruler.name}</b> · {RACE_LABEL[ruler.race].toLowerCase()} · {ruler.age} anos</>}{occupied}</div>
       {!mine && house.id !== game.playerHouseId && <div className={styles.relRow}><span className={styles.rel} data-tone={rel >= 20 ? 'good' : rel >= 0 ? 'mid' : 'bad'}>{signed(rel)} · {disposition(rel).toLowerCase()}</span><span>{ruler.traits.join(', ')}</span></div>}
       {ruler?.note && !mine && <p className={styles.note}>{ruler.note}</p>}
       {ruler?.second && !mine && <p className={styles.duality}><b>Duas consciências.</b> {ruler.name} e {ruler.second.name} ({ruler.second.traits[0]}) pesam cada proposta. Convencer uma não basta.</p>}
@@ -109,15 +118,50 @@ function Ways({ game, p, onOpen }: { game: GameState; p: Province; onOpen: (path
   </section>
 }
 
+const TAX: Record<TaxLevel, string> = { baixo: 'Baixo', normal: 'Normal', alto: 'Alto' }
+const WORKS: InvestmentKind[] = ['farms', 'market', 'mine', 'barracks']
+const pct = (n: number) => `${n >= 0 ? '+' : '−'}${Math.abs(n * 100).toFixed(1).replace('.', ',')}%`
+/** Your province: what it yields, how its people grow, and every lever of rule. */
 function OwnTerritory({ game, p, act }: { game: GameState; p: Province; act: Act }) {
-  const out = provinceProduction(game, p), up = provinceUpkeep(p)
+  const b = provinceBalance(game, p), admin = adminOf(game, p.id), ui = useUI()
   const seat = p.id === houseOf(game, game.playerHouseId).seatProvinceId
-  const ui = useUI()
+  const former = formerHouse(game, p), vassal = former && game.campaign.vassals.find(v => v.houseId === former.id)
+  const govs = governorCandidates(game), current = game.campaign.characters.find(c => c.id === admin.governor)
+  const conditions = (['seca', 'peste', 'bandidos'] as const).filter(k => conditionOf(game, p.id, k))
+  const until = (k: string) => game.campaign.conditions.filter(c => c.provinceId === p.id && c.kind === k).reduce((m, c) => Math.max(m, c.until), 0) - game.day
+  const COND = { seca: 'Seca: colheita pela metade', peste: 'Febre: a população cai', bandidos: 'Bandidos: renda −30%' }
   return <>
-    <div className={styles.stats}><span><b>{fmt(p.population)}</b>habitantes</span><span><b>{p.loyalty}%</b>lealdade</span><span><b>{signed(out.gold - up.administration)}</b>ouro/mês</span><span><b>{signed(out.food - up.consumption)}</b>grãos/mês</span></div>
+    <div className={styles.stats}>
+      <span><b>{fmt(p.population)}</b>habitantes<em className={b.growth.perMonth >= 0 ? styles.up : styles.down}>{signed(b.growth.perMonth)}/mês</em></span>
+      <span><b>{p.loyalty}%</b>lealdade</span>
+      <span><b>{signed(b.out.gold - b.administration)}</b>ouro/mês</span>
+      <span><b>{signed(b.out.food - b.consumption)}</b>grãos/mês</span>
+    </div>
+    {conditions.map(k => <p key={k} className={styles.alert}>{COND[k]} por mais {until(k)} dias.</p>)}
+    <div className={styles.growth} aria-label="Por que a população muda">{b.growth.factors.map(([label, v]) => <span key={label} className={v >= 0 ? styles.up : styles.down}>{pct(v)} {label}</span>)}</div>
+    <Section title="imposto">
+      <div className={styles.segment} role="radiogroup" aria-label="Imposto">{(Object.keys(TAX) as TaxLevel[]).map(t => <button key={t} role="radio" aria-checked={admin.tax === t} onClick={() => act(g => setTax(g, p.id, t))}>{TAX[t]}<small>{t === 'baixo' ? 'ouro ×0,6 · +2 lealdade' : t === 'alto' ? 'ouro ×1,4 · −3 lealdade' : 'equilíbrio'}</small></button>)}</div>
+    </Section>
+    {!seat && <Section title="governador">
+      <select className={styles.select} value={admin.governor ?? ''} onChange={e => act(g => setGovernor(g, p.id, e.target.value || null), 'Governador nomeado')} aria-label="Governador">
+        <option value="">ninguém (lealdade −1/mês)</option>
+        {current && <option value={current.id}>{current.name} · {current.role.toLowerCase()}</option>}
+        {govs.map(c => <option key={c.id} value={c.id}>{c.name} · {c.role.toLowerCase()}</option>)}
+      </select>
+      <p className={styles.small}>Longe de Irian, a terra precisa de alguém que governe por ele: +1 lealdade/mês, mais se for bom diplomata.</p>
+    </Section>}
+    {vassal && <Section title={`a antiga ${former!.name}`}>
+      <p className={styles.small}>{rulerOf(game, former!.id).name} jurou lealdade e perdeu o governo destas terras. Lealdade da família: <b>{vassal.loyalty}</b>{vassal.loyalty < 30 ? ' (perigo de revolta)' : ''}.</p>
+      <Action tone="sec" label={`Falar com ${rulerOf(game, former!.id).name}`} onClick={() => ui.openSheet({ kind: 'conversation', characterId: rulerOf(game, former!.id).id })}/>
+    </Section>}
+    <Section title="obras">{WORKS.map(kind => { const rule = BALANCE.investment[kind], q = workQuote(game, p.id, kind), wip = workInProgress(game, p.id, kind)
+      const benefit = kind === 'mine' ? `+${mineYield(p).amount} ${mineYield(p).label}/mês` : rule.benefit
+      return <button key={kind} className={styles.work} disabled={Boolean(wip) || q.max} onClick={() => act(g => startInvestment(g, kind, p.id), 'Obras iniciadas')}>
+        <span className={styles.workName}>{rule.name}<small>{benefit} por nível</small></span>
+        <span className={styles.pips}>{[1, 2, 3].map(i => <i key={i} className={i <= q.level ? styles.on : wip && i === q.next ? styles.wip : ''}/>)}</span>
+        <span className={styles.workCost}>{wip ? `${wip.endDay - game.day} dias` : q.max ? 'máximo' : <>{q.gold} ouro · {q.wood} mad.<small>{q.days} dias</small></>}</span>
+      </button> })}</Section>
     <Section title="produz">{<div className={styles.resRow}>{resList(p.resources)}</div>}</Section>
-    {seat && <Section title="obras em Pontevela">{(Object.keys(BALANCE.investment) as (keyof typeof BALANCE.investment)[]).map(kind => { const rule = BALANCE.investment[kind], inv = game.campaign.investments.find(i => i.kind === kind && i.provinceId === p.id)
-      return <Action key={kind} tone="sec" label={rule.name} detail={inv ? (inv.completed ? `concluída · ${rule.benefit}` : `em obra · ${inv.endDay - game.day} dias`) : `${rule.gold} ouro · ${rule.wood} madeira · ${rule.days} dias · ${rule.benefit}`} disabled={Boolean(inv) && (inv!.completed ? 'concluída' : 'em andamento')} onClick={() => act(g => startInvestment(g, kind), 'Obras iniciadas')}/> })}</Section>}
     {seat && <div className={styles.acts}><Action tone="sec" label="Falar com a corte" detail="mãe, irmãos, intendente" onClick={() => ui.openSheet({ kind: 'conversation', characterId: 'court-0' })}/></div>}
   </>
 }
@@ -148,7 +192,7 @@ function ForeignDiplomacy({ game, p, act }: { game: GameState; p: Province; act:
   const ui = useUI(), house = houseOf(game, p.governingHouseId), contact = game.campaign.contacts.find(c => c.houseId === house.id)
   const open = game.campaign.negotiations.find(n => n.houseId === house.id && (n.status === 'aberta' || n.status === 'aguardando'))
   const negotiate = (kind: Negotiation['kind']) => act(g => { const n = startNegotiation(g, house.id, kind); ui.openSheet({ kind: 'negotiation', negotiationId: n.campaign.negotiations.at(-1)!.id }); return n })
-  if (house.id === game.playerHouseId || isVassal(game, house.id)) return <p className={styles.small}>Essa casa já responde a você. Ela paga tributo todo mês.</p>
+  if (house.id === game.playerHouseId || isVassal(game, house.id)) return <p className={styles.small}>Esta terra é sua: toda a produção vai para o seu tesouro.</p>
   if (!contact || contact.establishedDay === null) return <><p className={styles.note}>Sem contato. Um emissário abre as portas.</p><div className={styles.acts}><Action label="Enviar emissário" detail={`${BALANCE.diplomacy.gold} ouro`} disabled={game.campaign.diplomacy.some(d => d.houseId === house.id && !d.completed) && 'a caminho'} onClick={() => act(g => sendEmissary(g, p.id), 'Emissário enviado')}/></div></>
   const giftWait = contact.lastGiftDay === null ? 0 : Math.max(0, contact.lastGiftDay + BALANCE.diplomacy.giftCooldown - game.day)
   return <>
@@ -164,12 +208,13 @@ function ForeignDiplomacy({ game, p, act }: { game: GameState; p: Province; act:
 }
 
 function OwnMilitary({ game, p, act }: { game: GameState; p: Province; act: Act }) {
-  const men = game.campaign.garrisons[p.id] ?? 0, cap = levyCap(p), wall = wallLevel(game, p), M = BALANCE.military
+  const men = game.campaign.garrisons[p.id] ?? 0, cap = levyCap(game, p), wall = wallLevel(game, p), M = BALANCE.military
   const [to, setTo] = useState<Id | ''>('')
   const [count, setCount] = useState(Math.min(100, men))
   const realm = game.world.provinces.filter(x => x.id !== p.id && inPlayerRealm(game, x.id))
   return <>
     <div className={styles.stats}><span><b>{men}</b>homens</span><span><b>{cap}</b>máximo</span><span><b>{wall}</b>muralha</span><span><b>{game.campaign.armies.filter(a => a.houseId === game.playerHouseId).length}</b>em marcha</span></div>
+    <p className={styles.small}>Até {Math.round((M.levyShare + M.barracksShare * workQuote(game, p.id, 'barracks').level) * 100)}% da população pode servir ({fmt(p.population)} habitantes). A população cresce {signed(provinceBalance(game, p).growth.perMonth)} por mês; fazendas, comida e lealdade aceleram. Um quartel (visão Território) aumenta o limite.</p>
     <div className={styles.acts}>
       <Action label={`Recrutar ${M.recruitBatch} homens`} detail={`${M.recruitGold} ouro · ${M.recruitRenown} renome · ${M.recruitIron} ferro`} disabled={men + M.recruitBatch > cap && 'população no limite'} onClick={() => act(g => recruit(g, p.id), 'Recrutamento')}/>
       <Action tone="sec" label={`Reforçar muralhas (nível ${wall + 1})`} detail={`${M.wallUpgrade.stone} pedra · ${M.wallUpgrade.gold} ouro`} disabled={wall >= 5 && 'nível máximo'} onClick={() => act(g => upgradeWalls(g, p.id), 'Muralhas reforçadas')}/>
@@ -222,7 +267,7 @@ function SpyMission({ game, p, kind, act }: { game: GameState; p: Province; kind
 }
 function ForeignInfluence({ game, p, act }: { game: GameState; p: Province; act: Act }) {
   const house = houseOf(game, p.governingHouseId), I = BALANCE.influence
-  if (isVassal(game, house.id)) { const v = game.campaign.vassals.find(x => x.houseId === house.id)!; return <div className={styles.stats}><span><b>{v.loyalty}</b>lealdade</span><span><b>{Math.round(v.tribute * 100)}%</b>tributo</span><span><b>{v.path}</b>caminho</span></div> }
+  if (isVassal(game, house.id)) { const v = game.campaign.vassals.find(x => x.houseId === house.id)!; return <div className={styles.stats}><span><b>{v.loyalty}</b>lealdade</span><span><b>{v.terms ?? '—'}</b>termos</span><span><b>{v.path}</b>caminho</span></div> }
   const inf = influenceOf(game, house.id), bond = bondWith(game, house.id), debt = debtOf(game, house.id), can = canInfluence(game, house.id)
   if (!can) return <p className={styles.note}>Sem acesso à corte. Estabeleça contato primeiro (Diplomacia).</p>
   const wait = (k: string, d: number) => { const n = cooldownLeft(game, house.id, k, d); return n > 0 && `de novo em ${n} dias` }

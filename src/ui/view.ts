@@ -43,7 +43,7 @@ export function upcoming(g: GameState): Pin[] {
   const pins: Pin[] = []
   const name = (id: Id) => knowledge(g, id) >= 2 ? provinceOf(g, id).name : 'terra avistada'
   for (const e of g.campaign.expeditions) if (!e.completed) pins.push({ day: e.endDay, kind: 'batedores', text: `voltam de ${name(e.provinceId)}`, tone: 'teal', provinceId: e.provinceId })
-  for (const i of g.campaign.investments) if (!i.completed) pins.push({ day: i.endDay, kind: 'obra', text: 'conclusão em Pontevela', tone: 'green', provinceId: i.provinceId })
+  for (const i of g.campaign.investments) if (!i.completed) pins.push({ day: i.endDay, kind: 'obra', text: `conclusão em ${provinceOf(g, i.provinceId).name}`, tone: 'green', provinceId: i.provinceId })
   for (const d of g.campaign.diplomacy) if (!d.completed) pins.push({ day: d.endDay, kind: 'emissário', text: `chega a ${name(d.provinceId)}`, tone: 'gold', provinceId: d.provinceId })
   for (const n of g.campaign.negotiations) if (n.status === 'aguardando') pins.push({ day: n.replyDay, kind: 'resposta', text: houseOf(g, n.houseId).name, tone: 'gold', provinceId: houseOf(g, n.houseId).seatProvinceId })
   for (const m of g.campaign.spyMissions) if (!m.completed) pins.push({ day: m.endDay, kind: 'espião', text: `volta de ${name(m.provinceId)}`, tone: 'grey', provinceId: m.provinceId })

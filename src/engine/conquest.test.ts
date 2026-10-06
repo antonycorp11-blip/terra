@@ -5,12 +5,13 @@ import { attack, attackQuote, defenders, moveTroops, recruit, levyCap } from './
 import { openDecisions, resolveDecision } from './decisions'
 import { economicBalance } from './economy'
 import { influenceAction, influenceOf, oathReady, proposeOath } from './influence'
-import { offersFor, propose, startNegotiation } from './negotiation'
+import { offersFor, propose, scoreOffer, startNegotiation, negotiationBlocked } from './negotiation'
+import { diplomaticAction } from './diplomacy'
 import { ascension, liegeHouse } from './politics'
 import { startTravel, buyResource, purchaseQuote, sellers } from './travel'
 import { knowledge } from './knowledge'
 import { migrateGame } from './persistence'
-import { isVassal, inPlayerRealm } from './stateUtils'
+import { isVassal, inPlayerRealm, controlled } from './stateUtils'
 import { BALANCE } from './balance'
 import type { GameState } from './types'
 
@@ -36,9 +37,9 @@ describe('conquista militar', () => {
     expect(player(r).gold).toBe(700 - BALANCE.military.recruitGold)
     expect(player(r).prestige).toBe(32 - BALANCE.military.recruitRenown)
     expect(player(r).stock.iron).toBe(180 - BALANCE.military.recruitIron)
-    expect(levyCap(p)).toBe(490)
+    expect(levyCap(r, p)).toBe(490)
     let full = rich(fresh())
-    while ((full.campaign.garrisons[p.id] ?? 0) + 50 <= levyCap(p)) full = recruit(full, p.id)
+    while ((full.campaign.garrisons[p.id] ?? 0) + 50 <= levyCap(r, p)) full = recruit(full, p.id)
     expect(() => recruit(full, p.id)).toThrow('sustenta no máximo')
   })
   it('marcha, cerca, pede a escolha da tática, vence e transforma a casa em vassala', () => {
@@ -69,10 +70,16 @@ describe('conquista militar', () => {
     g = resolveDecision(g, submit.id, 'firmes')
     const ardesh = house(g, 'Casa Ardesh')
     expect(isVassal(g, ardesh.id)).toBe(true)
-    expect(g.world.provinces.find(p => p.id === target.id)!.liegeHouseId).toBe(g.playerHouseId)
+    // The land passes to the player's rule: all of its output, recruitment and decisions.
+    const taken = g.world.provinces.find(p => p.id === target.id)!
+    expect(taken.governingHouseId).toBe(g.playerHouseId)
+    expect(controlled(g).some(p => p.id === target.id)).toBe(true)
     expect(inPlayerRealm(g, target.id)).toBe(true)
+    expect(g.campaign.garrisons[target.id]).toBeGreaterThan(0)
+    expect(g.campaign.admin[target.id].governor).toBeNull() // firm terms strip the old lord
+    expect(economicBalance(g).revenue).toBeGreaterThan(economicBalance(rich(fresh())).revenue)
     expect(g.campaign.politics.liegeThreat).toBeGreaterThan(threat)
-    expect(economicBalance(g).tribute).toBeGreaterThan(0)
+    expect(recruit(g, target.id).campaign.garrisons[target.id]).toBe(g.campaign.garrisons[target.id] + BALANCE.military.recruitBatch)
     expect(roundTrip(g)).toEqual(g)
   })
   it('atacar sem justificativa custa renome e assusta o grão-lorde', () => {
@@ -113,11 +120,17 @@ describe('conquista diplomática', () => {
     g = propose(g, g.campaign.negotiations.at(-1)!.id, ['ouro', 'prata', 'casamento'])
     g = advanceGame(g, g.campaign.negotiations.at(-1)!.replyDay - g.day)
     expect(g.campaign.contacts.find(c => c.houseId === id)!.alliance).toBe(true)
+    // Vassalage by treaty needs real strength: 1.5× their defenders under arms.
+    g.campaign.garrisons[seat(g).id] = 100
+    expect(negotiationBlocked(g, id, 'vassalagem')).toContain('homens em armas')
     g.campaign.garrisons[seat(g).id] = 450
     expect(offersFor(g, id).find(o => o.kind === 'proteção')!.value).toBe(30) // Vasterre fears Ardesh
-    // A treaty of vassalage also needs standing at court: a banquet and patronage raise influence.
+    // A treaty of vassalage needs months of standing at court: banquets, patronage and gifts.
     g = influenceAction(influenceAction(g, id, 'banquete'), id, 'patrocínio')
     g = startNegotiation(g, id, 'vassalagem')
+    expect(scoreOffer(g, id, 'vassalagem', ['proteção', 'ouro', 'prata', 'casamento'])).toBeLessThan(BALANCE.negotiation.thresholds.vassalagem)
+    g = advanceGame(g, 31); g = diplomaticAction(influenceAction(g, id, 'banquete'), id, 'gift')
+    g = advanceGame(g, 16); g = influenceAction(g, id, 'patrocínio')
     g = propose(g, g.campaign.negotiations.at(-1)!.id, ['proteção', 'ouro', 'prata', 'casamento'])
     g = advanceGame(g, g.campaign.negotiations.at(-1)!.replyDay - g.day)
     const oath = openDecisions(g).find(d => d.kind === 'juramento')!
@@ -125,6 +138,7 @@ describe('conquista diplomática', () => {
     g = resolveDecision(g, oath.id, 'generosos')
     expect(isVassal(g, id)).toBe(true)
     expect(g.campaign.vassals.find(v => v.houseId === id)!.path).toBe('diplomacia')
+    expect(g.world.provinces.find(p => p.id === house(g, 'Casa Vasterre').seatProvinceId)!.governingHouseId).toBe(g.playerHouseId)
   })
 })
 
@@ -140,6 +154,9 @@ describe('conquista por influência', () => {
     g = influenceAction(g, id, 'dívida')
     expect(g.campaign.bonds.some(b => b.houseId === id && b.kind === 'dívida')).toBe(true)
     g = influenceAction(g, id, 'patrocínio')
+    // Each step is worth less as the house nears the oath: one more month of courting.
+    expect(oathReady(g, id)).toBe(false)
+    g = influenceAction(advanceGame(g, 31), id, 'banquete')
     expect(oathReady(g, id)).toBe(true)
     g = proposeOath(g, id)
     g = resolveDecision(g, openDecisions(g).find(d => d.kind === 'juramento')!.id, 'generosos')
@@ -191,7 +208,7 @@ describe('o mundo reage', () => {
     let next = g
     for (const name of ['Casa Quellan', 'Casa Vasterre', 'Casa Morvane']) {
       const id = house(next, name).id
-      next = structuredClone(next); next.campaign.influence[id] = 70; next.campaign.bonds.push({ houseId: id, kind: 'segredo', day: 0, text: 'teste' })
+      next = structuredClone(next); next.campaign.influence[id] = 70; next.campaign.contacts.find(c => c.houseId === id)!.relation = 30; next.campaign.bonds.push({ houseId: id, kind: 'segredo', day: 0, text: 'teste' })
       next = proposeOath(next, id)
       next = resolveDecision(next, openDecisions(next).find(d => d.kind === 'juramento')!.id, 'generosos')
     }

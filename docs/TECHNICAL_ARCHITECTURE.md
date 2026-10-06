@@ -15,7 +15,7 @@ Invariantes: contagens canônicas; toda célula de terra pertence a uma provínc
 
 ## Estado persistente
 
-`GameState` versão 3 = `world` + `campaign: CampaignData` revisão 2 (`mvpTypes.ts`). Além de conhecimento, expedições, obras, personagens, contatos, agentes, relatórios, conversas e notificações, a campanha guarda `garrisons`, `armies`, `battles`, `claims`, `bonds`, `vassals`, `influence`, `influenceCooldowns`, `negotiations`, `decisions`, `politics`, `travel` e `purchases`. `House.stock` tem os seis recursos; `House.prestige` é o renome; `Province.resources`, `area` e `labelAngle` são novos.
+`GameState` versão 3 = `world` + `campaign: CampaignData` revisão 3 (`mvpTypes.ts`). A revisão 3 acrescenta `admin` (imposto e governador por província), `nextEventDay`, `eventLog`, `wars` e `conditions` (seca, febre, bandidos com data de fim); salvamentos da revisão 2 recebem essas camadas vazias sem perder nada. Além de conhecimento, expedições, obras, personagens, contatos, agentes, relatórios, conversas e notificações, a campanha guarda `garrisons`, `armies`, `battles`, `claims`, `bonds`, `vassals`, `influence`, `influenceCooldowns`, `negotiations`, `decisions`, `politics`, `travel` e `purchases`. `House.stock` tem os seis recursos; `House.prestige` é o renome; `Province.resources`, `area` e `labelAngle` são novos.
 
 ## Regras
 
@@ -23,24 +23,26 @@ Invariantes: contagens canônicas; toda célula de terra pertence a uma provínc
 |---|---|
 | `balance.ts` | Única fonte de valores |
 | `stateUtils.ts` | `editGame` (cópia do estado mutável, geometria compartilhada), `pay` e `missing` (custos com mensagem do que falta), `controlled`, `isVassal`, `inPlayerRealm` |
-| `economy.ts` | Produção lida dos assentamentos, administração e consumo por população, tributo de vassalos, manutenção de tropas e agentes, inverno e sal |
-| `military.ts` | Muralhas, defensores, recrutamento, muralhas, deslocamento, rotas, marcha, cerco, `resolveBattle` determinístico (hash), assalto com tática, defesa contra exércitos inimigos, posição interpolada para o mapa |
-| `negotiation.ts` | Ofertas com custo e valor por casa, pontuação, rodadas, resposta após a viagem do emissário, devolução do custo na recusa |
-| `influence.ts` | Influência por casa, banquete, patrocínio, casamento, compra de dívida, laços, cerimônia de juramento |
-| `vassals.ts` | `makeVassal` (suserania das províncias, cor, ameaça, coroa, renome), lealdade e renúncia |
+| `economy.ts` | Produção lida dos assentamentos, `provinceBalance` (imposto, obras por nível, seca, bandidos), `populationGrowth` com fatores nomeados, lealdade mensal (imposto, governador, ausência), `setTax`, `setGovernor`, manutenção, inverno e sal |
+| `investments.ts` | Obras em 3 níveis em qualquer província sua (`workLevel`, `workQuote`, `mineYield`) |
+| `events.ts` | Acontecimentos com escolhas (`processEvents`, `resolveEvent`), guerras entre casas, empréstimos, sucessão do grão-lorde, revolta de casa jurada |
+| `military.ts` | Muralhas, defensores, `levyCap(g, p)` com quartel, deslocamento, rotas, marcha, cerco com desgaste, socorro do suserano (`socorrer`) e batalha em campo, `resolveBattle` determinístico (hash), assalto com tática, defesa contra exércitos inimigos, cercos entre outras casas, posição interpolada para o mapa |
+| `negotiation.ts` | Ofertas com custo e valor por casa, pontuação, rodadas, resposta após a viagem do emissário, devolução do custo na recusa; vassalagem exige ameaça e `vassalStrength` |
+| `influence.ts` | Influência por casa com ganho por relação, temperamento e retorno decrescente (`influenceGain`), abandono, banquete, patrocínio, casamento, compra de dívida, laços, cerimônia de juramento |
+| `vassals.ts` | `makeVassal` transfere as terras da casa ao jogador (governo, posse, produção), guarnição com parte dos homens dela, lealdade mensal e revolta |
 | `politics.ts` | Tributo, convocação, advertência, ultimato, guerra, oferta da coroa, ascensão a grão-lorde |
 | `travel.ts` | Viagem pessoal do lorde e compra de recursos |
 | `decisions.ts` | Decisões que pausam o tempo, com opções e consequências descritas, e `resolveDecision` |
 | `plans.ts` | Etapas reais dos três caminhos de conquista |
-| `characters.ts`, `dialogue.ts` | Raça, figura, segunda consciência dos duários (responde e tem relação própria) |
+| `characters.ts`, `dialogue.ts` | Raça, figura, segunda consciência dos duários; vozes por temperamento, humor, interesse e raça; `topicsFor`, `playerLine` (a fala de Irian) |
 
-`advanceGame` processa por dia: obras, expedições, viagem, diplomacia, negociações, espionagem, exército, política, vassalos, influência, economia, estações, eventos locais. Sorteios usam `hash` sobre IDs e dias; N dias de uma vez equivalem a N passos.
+`advanceGame` processa por dia: obras, expedições, viagem, diplomacia, negociações, espionagem, exército, política, vassalos, acontecimentos e guerras, influência, economia, estações, eventos locais. Sorteios usam `hash` sobre IDs e dias; N dias de uma vez equivalem a N passos.
 
 ## Interface
 
 - `App.tsx`: telas (título, criação, jogo), relógio (pausa automática em notificação importante ou decisão aberta), autosave a cada 30 dias, ações via `act`.
-- `MapView.tsx`: renderizador em canvas na resolução nativa (até 3×, limite de ~6,5 Mpx). O `map/terrainWorker.ts` entrega o relevo em duas passadas e as listas vetoriais de árvores, picos e rios; o mundo é gerado em `worldWorker.ts`. Cada quadro completo desenha relevo, estradas, rios, árvores, picos, camada política (névoa em padrão, cores das casas, faixa interna, listras de vassalo, fronteiras classificadas por `map/geometry.ts`, visões) recortada pela máscara da costa, contornos e nomes em espaço de tela. Durante arraste e pinça a imagem anterior é transformada por CSS; o redesenho ocorre 120 ms após o fim do gesto ou quando a assinatura visual muda (conhecimento, suserania, ocupação, seleção, visão e dados da visão), nunca a cada dia. Toques usam `isPointInPath`. Lordes, exércitos e a viagem são elementos HTML posicionados pelo último quadro.
-- `game/GameScreen.tsx` (HUD, linha do tempo, visões, avisos), `game/ProvinceCard.tsx` (carta por visão e situação), `game/LensSummary.tsx`, `game/Sheets.tsx` (Casas, conversa, plano, negociação, menu, crônica), `game/Scenes.tsx` (decisões e batalha animada).
+- `MapView.tsx`: renderizador em canvas na resolução nativa (até 3×, limite de ~6,5 Mpx). O `map/terrainWorker.ts` entrega o relevo em duas passadas e as listas vetoriais de árvores, picos e rios; o mundo é gerado em `worldWorker.ts`. Cada quadro completo desenha relevo, estradas, rios, árvores, picos, camada política (névoa em padrão, cores das casas, faixa interna, listras de vassalo, fronteiras classificadas por `map/geometry.ts`, visões) recortada pela máscara da costa, contornos e nomes em espaço de tela. Durante arraste e pinça a imagem anterior é transformada por CSS; o redesenho ocorre 120 ms após o fim do gesto ou quando a assinatura visual muda (conhecimento, suserania, ocupação, seleção, visão e dados da visão), nunca a cada dia. Toques usam `isPointInPath`. Lordes, estandartes das suas províncias, exércitos e a viagem são elementos HTML posicionados pelo último quadro; o lorde da casa selecionada sai do mapa enquanto a carta está aberta.
+- `game/GameScreen.tsx` (HUD, linha do tempo, visões, avisos), `game/ProvinceCard.tsx` (carta por visão e situação), `game/LensSummary.tsx`, `game/Sheets.tsx` (Casas, plano, menu, crônica), `game/Audience.tsx` (conversa e negociação em cena de audiência), `game/Scenes.tsx` (decisões, acontecimentos e batalha animada).
 - Em desenvolvimento, `window.__terra` expõe `{ game, setGame }` para os testes de interface; não existe no build de produção.
 
 # 25. ARQUITETURA DE SOFTWARE

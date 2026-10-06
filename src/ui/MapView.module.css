@@ -10,8 +10,12 @@
 .map[data-zoom="near"] .lord img{height:96px}
 .lord .base{width:26px;height:8px;margin-top:-5px;border-radius:50%;background:radial-gradient(ellipse,var(--hc) 0,transparent 70%);opacity:.9}
 @media (hover:hover){.lord:hover img{filter:drop-shadow(0 0 6px rgba(255,230,160,.8)) drop-shadow(0 3px 3px rgba(0,0,0,.55))}}
-.active{z-index:5}
-.active img{height:112px!important;filter:drop-shadow(0 0 10px rgba(255,220,130,.95)) drop-shadow(0 4px 4px rgba(0,0,0,.6))}
+.active{z-index:5;opacity:0;pointer-events:none;transition:opacity .2s}
+/* Your banner flies over every province you rule. */
+.banner{position:absolute;transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;pointer-events:auto;cursor:pointer;border:0;background:none;padding:0;filter:drop-shadow(0 2px 3px rgba(0,0,0,.55))}
+.banner .pole{width:2px;height:16px;background:linear-gradient(#e8cf8a,#5a4320)}
+.banner .flag{display:block;line-height:0;padding:2px;border-radius:3px;background:rgba(20,16,8,.55);box-shadow:0 0 0 1px rgba(241,207,115,.7)}
+.map[data-zoom="far"] .banner .pole{height:8px}
 .me img{filter:drop-shadow(0 0 4px rgba(241,207,115,.85)) drop-shadow(0 3px 3px rgba(0,0,0,.55))}
 .crestOnly{display:block;filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
 .traveling img{height:52px}
@@ -19,4 +23,4 @@
 .army{position:absolute;transform:translate(-50%,-50%);display:flex;align-items:center;gap:3px;padding:2px 6px 2px 3px;border-radius:12px;font:700 11px 'Alegreya Sans SC',sans-serif;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.5)}
 .armyMine{background:#2b2208;color:#ffe3a0;border:1px solid #f1cf73}
 .armyFoe{background:#4a130d;color:#ffd5c9;border:1px solid #ff6a52}
-@media (max-height:520px){.lord img{height:52px}.map[data-zoom="far"] .lord img{height:34px}.map[data-zoom="near"] .lord img{height:78px}.active img{height:90px!important}}
+@media (max-height:520px){.lord img{height:52px}.map[data-zoom="far"] .lord img{height:34px}.map[data-zoom="near"] .lord img{height:78px}}

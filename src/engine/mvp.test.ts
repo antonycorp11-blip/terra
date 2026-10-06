@@ -131,7 +131,7 @@ describe('economia e investimentos', () => {
     g = advanceGame(g, 30)
     const b = economicBalance(roundTrip(g))
     expect(b.foodProduction).toBe(300); expect(b.iron).toBe(45)
-    expect(g.world.history.some(r => r.description.includes('Investimento concluído'))).toBe(true)
+    expect(g.world.history.some(r => r.description.includes('Obra concluída'))).toBe(true)
     const broke = structuredClone(base); broke.world.houses.find(h => h.id === broke.playerHouseId)!.gold = 10
     expect(() => startInvestment(broke, 'farms')).toThrow('Faltam')
   })

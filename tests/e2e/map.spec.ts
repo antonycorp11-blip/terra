@@ -15,6 +15,28 @@ async function foundHouse(page: Page, name = 'Ravencor') {
   await expect(map(page)).toBeVisible({ timeout: 30_000 })
 }
 /** Development-only handle (src/ui/game/GameScreen.tsx) used to fast-forward a campaign. */
+/**
+ * Runs time until `target` appears. World events, the liege's letters and battles along the way are
+ * answered with their last (most cautious) choice, as a passive player would.
+ */
+async function runUntil(page: Page, name: string | RegExp, timeout = 60_000) {
+  const target = page.getByRole('dialog', { name }), end = Date.now() + timeout
+  const isTarget = (label: string | null) => label !== null && (typeof name === 'string' ? label === name : name.test(label))
+  while (Date.now() < end) {
+    if (await target.isVisible()) return target
+    const other = page.getByRole('dialog').first()
+    // Never answer the dialog we are waiting for, even if it appeared a moment ago.
+    if (await other.isVisible() && !isTarget(await other.getAttribute('aria-label').catch(() => null))) {
+      const cont = other.getByRole('button', { name: /^Continuar$|^pular$/ })
+      // A new dialog may replace this one mid-click; short timeouts keep the loop moving.
+      if (await cont.count()) await cont.last().click({ timeout: 1500 }).catch(() => {})
+      else { const choices = other.locator('button[class*="choice"]'); if (await choices.count()) await choices.last().click({ timeout: 1500 }).catch(() => {}) }
+    } else if (await page.getByRole('button', { name: 'Continuar' }).isVisible()) await page.getByRole('button', { name: 'Velocidade 3' }).click({ timeout: 1500 }).catch(() => {})
+    await page.waitForTimeout(150)
+  }
+  await expect(target).toBeVisible()
+  return target
+}
 async function edit(page: Page, script: string) {
   await page.evaluate(script => {
     const t = (window as unknown as { __terra: { game: unknown; setGame: (g: unknown) => void } }).__terra
@@ -93,12 +115,8 @@ test('conquista militar: marcha, cerco, tática, batalha animada e juramento mud
   await card(page).getByRole('button', { name: /Marchar contra/ }).click()
   await expect(page.getByText(/Seu exército de \d+ homens está a caminho/)).toBeVisible()
   await page.getByRole('button', { name: 'Velocidade 3' }).click()
-  // The liege's summons may interrupt the siege: answer it and keep time running.
-  const levy = page.getByRole('dialog', { name: 'Convocação da Casa Hadrin' })
-  const decision = page.getByRole('dialog', { name: /As muralhas de/ })
-  await expect(levy.or(decision)).toBeVisible({ timeout: 40_000 })
-  if (await levy.isVisible()) { await levy.getByRole('button', { name: /Inventar uma desculpa/ }).click(); await page.getByRole('button', { name: 'Velocidade 3' }).click() }
-  await expect(decision).toBeVisible({ timeout: 40_000 })
+  // Events, the liege's summons and his relief army may interrupt the siege: answer and keep going.
+  const decision = await runUntil(page, /As muralhas de/, 90_000)
   await expect(decision.getByText('o tempo parou')).toBeVisible()
   await decision.getByRole('button', { name: /Ataque ao amanhecer/ }).click()
   const battle = page.getByRole('dialog', { name: /Batalha de/ })
@@ -110,8 +128,14 @@ test('conquista militar: marcha, cerco, tática, batalha animada e juramento mud
   await oath.getByRole('button', { name: /Termos generosos/ }).click()
   await expect(page.getByRole('button', { name: /Casas/ })).toContainText('1')
   await expect(page.getByText(/Grão-lorde: 2 de 4 casas/)).toBeVisible()
-  await lord(page, 'Casa Ardesh').click()
-  await expect(card(page).getByText('sua vassala')).toBeVisible()
+  // The land is now the player's: the old lord leaves the map and your banner flies over it.
+  await expect(lord(page, 'Casa Ardesh')).toHaveCount(0)
+  await lens(page, 'Território').click()
+  await page.locator('button[aria-label$="sua província"]').first().click()
+  await expect(card(page).getByText(/Tomada da Casa Ardesh/)).toBeVisible()
+  await expect(card(page).getByRole('radiogroup', { name: 'Imposto' })).toBeVisible()
+  await card(page).getByRole('radio', { name: /Alto/ }).click()
+  await expect(card(page).getByRole('radio', { name: /Alto/ })).toHaveAttribute('aria-checked', 'true')
 })
 
 test('conversas respeitam as duas consciências de um duário', async ({ page }) => {
@@ -119,17 +143,30 @@ test('conversas respeitam as duas consciências de um duário', async ({ page })
   await lord(page, 'Casa Quellan').click()
   await expect(card(page).getByText('Duas consciências.')).toBeVisible()
   await card(page).getByRole('button', { name: /Conversar com Bertram/ }).click()
-  const talk = page.getByRole('dialog', { name: 'Bertram' })
-  await talk.getByRole('button', { name: 'Elogiar' }).click()
+  const talk = page.getByRole('dialog', { name: 'Conversa com Bertram' })
+  await talk.getByRole('button', { name: /Elogiar/ }).click()
   await expect(talk.getByText(/Bram/).first()).toBeVisible()
   await expect(talk.getByRole('button', { name: /Elogiar/ })).toBeDisabled()
+  // Asking what the house needs tells what would weigh in a negotiation.
+  await talk.getByRole('button', { name: /Do que precisam/ }).click()
+  await expect(talk.getByText(/Mercol|negociarmos/).first()).toBeVisible()
+})
+
+test('o mundo não para: acontecimentos pedem decisões com consequência', async ({ page }) => {
+  await foundHouse(page)
+  await page.getByRole('button', { name: 'Velocidade 3' }).click()
+  const event = page.getByRole('dialog').filter({ hasText: 'acontecimento' })
+  await expect(event).toBeVisible({ timeout: 20_000 })
+  await event.locator('button[class*="choice"]').first().click()
+  await expect(event).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Continuar' })).toBeVisible()
 })
 
 test('a convocação do grão-lorde pausa o tempo e exige uma decisão', async ({ page }) => {
+  test.setTimeout(90_000)
   await foundHouse(page)
   await page.getByRole('button', { name: 'Velocidade 3' }).click()
-  const levy = page.getByRole('dialog', { name: 'Convocação da Casa Hadrin' })
-  await expect(levy).toBeVisible({ timeout: 20_000 })
+  const levy = await runUntil(page, 'Convocação da Casa Hadrin', 60_000)
   await levy.getByRole('button', { name: /Enviar 100 homens/ }).click()
   await expect(levy).toBeHidden()
   await expect(page.getByRole('button', { name: 'Continuar' })).toBeVisible()

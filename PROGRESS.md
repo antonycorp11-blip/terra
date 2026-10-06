@@ -1,5 +1,30 @@
 # Progresso real
 
+## Profundidade — governar o que se conquista, mundo vivo, conquista mais dura: concluída em 06/10/2026
+
+Resposta ao teste no celular: dias sem nada mudar, conquista fácil demais, população que não crescia, terra conquistada sem uso, diálogos iguais e telas apertadas.
+
+### Implementado
+
+- **Conquistar é governar**: a casa vencida (ou jurada por tratado ou influência) entrega as terras. Toda a produção vem para o jogador, que recruta, constrói e cobra imposto nelas; a família vira vassala sem governo (com termos generosos o antigo lorde governa a sede em nome do jogador). O lorde vencido sai do mapa; o estandarte do jogador aparece em cada província sua.
+- **Governo por província**: imposto (baixo, normal, alto), governador (corte ou antigo lorde), obras em 3 níveis em qualquer província (fazendas, mercado, mina conforme a terra, quartel).
+- **População que cresce** todo mês, com os motivos na carta (natural, celeiros, lealdade, imposto, fazendas, inverno, febre, fome). O limite de recrutamento é explicado (8% + 3% por quartel).
+- **Mundo vivo**: acontecimentos com escolha a cada 6 a 11 dias (13 tipos), guerras entre casas com cercos reais e tréguas, empréstimos, revolta de casas juradas, morte e sucessão do grão-lorde no dia 170.
+- **Conquista mais dura**: desgaste no cerco, socorro do suserano da casa sitiada, influência com retorno decrescente e abandono, juramento exige relação +15, tratado de vassalagem exige ameaça e 1,5× os defensores em armas, limiares de negociação 18/45/90.
+- **Conversas com voz própria** (temperamento, humor, interesse, raça, duas consciências) e assuntos úteis: do que precisam, notícias (guerras, muralhas fracas, dívidas), intimidar.
+- **Telas novas**: conversa e negociação em cena de audiência (lorde de corpo inteiro à esquerda, falas e ofertas à direita), figura do lorde dentro da carta, cena de acontecimento, margens do iPhone (notch) respeitadas, menos itens na linha do tempo no celular, resumo da visão escondido quando a carta está aberta.
+
+### Validação em 06/10/2026
+
+- `npm test`: 45 testes (inclui `depth.test.ts`).
+- `npm run test:ui`: 9 fluxos Playwright.
+- `npm run build`: sem erros.
+
+### Limitações conhecidas
+
+- As guerras entre casas seguem regras simples (um ataque por guerra, trégua em 90 dias); não há alianças entre elas.
+- Casas juradas não têm terras próprias para devolver em caso de revolta além da antiga sede.
+
 ## Reestruturação — mapa realista, casas vivas e conquista em etapas: concluída em 05/10/2026
 
 Direção definida com o jogador em três rodadas de maquete. Escopo e valores em `docs/MVP_SCOPE.md`; raças em `docs/RACES.md`.
@@ -30,7 +55,6 @@ Direção definida com o jogador em três rodadas de maquete. Escopo e valores e
 
 ### Limitações conhecidas
 
-- As outras casas reagem ao jogador, mas não fazem guerras ou alianças entre si.
 - Rei de Velária e unificação aparecem na escada de ambição, mas ainda não são jogáveis.
 - A geração do mundo leva de 1,5 a 2 s ao criar a campanha; o relevo é pintado em segundo plano.
 - As 60 figuras de lordes são provisórias e vão para os lordes mais próximos do jogador; os demais aparecem pelo brasão.

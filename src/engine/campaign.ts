@@ -12,9 +12,14 @@ const START_INFLUENCE: Record<string, number> = { 'Casa Hadrin': 18, 'Casa Morva
 /** Relations with the houses of Três Pontes, known since before the campaign. */
 const START_RELATION: Record<string, number> = { 'Casa Hadrin': 22, 'Casa Morvane': -4, 'Casa Quellan': 31, 'Casa Ardesh': -28, 'Casa Vasterre': 9 }
 
+/** Layers added in revision 3: province rule, world events, wars between houses. */
+const EMPTY_LAYERS = () => ({ admin: {}, nextEventDay: 8, eventLog: {}, wars: [], conditions: [] })
+
 /** Builds the campaign layer for a fresh world. The player's own fief is known; its borders are sighted. */
 export function initializeCampaign(old: LegacyGame): GameState {
-  if (old.campaign?.revision === 2 && old.version === 3) return old as GameState
+  if (old.campaign?.revision === 3 && old.version === 3) return old as GameState
+  // Revision 2 saves keep everything; the new layers start empty.
+  if ((old.campaign?.revision as number) === 2 && old.version === 3) return { ...old, campaign: { ...EMPTY_LAYERS(), ...old.campaign, revision: 3 } } as GameState
   const house = old.world.houses.find(h => h.id === old.playerHouseId)!
   const seat = old.world.provinces.find(p => p.id === house.seatProvinceId)!
   const characters = makeCharacters(old.world, old.playerHouseId)
@@ -24,7 +29,7 @@ export function initializeCampaign(old: LegacyGame): GameState {
   const g: GameState = {
     ...old, version: 3,
     campaign: {
-      revision: 2, customization: { name: house.name.replace(/^Casa /, ''), heraldry: { ...DEFAULT_HERALDRY } }, knowledge,
+      ...EMPTY_LAYERS(), revision: 3, customization: { name: house.name.replace(/^Casa /, ''), heraldry: { ...DEFAULT_HERALDRY } }, knowledge,
       expeditions: [], investments: [], ledger: [], characters, contacts: [], diplomacy: [],
       agents: characters.filter(c => c.id.startsWith('candidate-')).map((c, i) => ({ id: `agent-${i}`, characterId: c.id, loyalty: [78, 86, 64, 81][i], hired: false, description: ['Conhece arquivos e disfarces de corte.', 'Lê trilhas e observa fortificações.', 'O comércio abre portas, mas sua ambição é alta.', 'Viaja discretamente entre estalagens.'][i] })),
       spyMissions: [], reports: [], conversations: [], notifications: [], nextId: 1,

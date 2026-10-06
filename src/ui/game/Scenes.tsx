@@ -5,6 +5,7 @@ import { choicesFor, resolveDecision } from '../../engine/decisions'
 import { defenders, wallLevel } from '../../engine/military'
 import { BALANCE } from '../../engine/balance'
 import Crest from '../Heraldry'
+import Icon, { ResourceIcon, type IconName } from '../Icons'
 import { type Act } from '../parts'
 import { cardUrl, heraldryOf, houseOf, mapColor, provinceOf } from '../view'
 import styles from './Game.module.css'
@@ -58,6 +59,7 @@ export function BattleScene({ game, battleId, onClose }: { game: GameState; batt
   </div>
 }
 
+const EVENT_ICON: Record<string, IconName> = { bandidos: 'militar', motim: 'militar', revolta: 'militar', mercador: 'gold', emprestimo: 'gold', espiao: 'speech', contra: 'influencia', refugiados: 'houses', peticao: 'houses', torneio: 'renown', casamento: 'influencia', peste: 'bell', sucessao: 'houses' }
 /** Decisions that pause the world: the siege assault, oaths, the liege's letters and the crown's offer. */
 export function DecisionScene({ game, decision, act }: { game: GameState; decision: Decision; act: Act }) {
   const choices = choicesFor(game, decision)
@@ -82,6 +84,12 @@ export function DecisionScene({ game, decision, act }: { game: GameState; decisi
       {ruler?.portraitAsset ? <img className={styles.kneel} src={cardUrl(ruler.portraitAsset)} alt={ruler.name}/> : <span/>}
       <Crest heraldry={heraldryOf(game, house!)} size={56}/>
     </div>
+  } else if (decision.kind === 'evento') {
+    const ev = decision.event!, p = decision.provinceId ? provinceOf(game, decision.provinceId) : null
+    title = ev.title; text = ev.text
+    // Events about another house show its lord; events in your land show the land and what struck it.
+    art = ruler && house && house.id !== player.id ? <div className={styles.letter}>{ruler.portraitAsset && <img src={cardUrl(ruler.portraitAsset)} alt={ruler.name}/>}<div><Crest heraldry={heraldryOf(game, house)} size={44}/><b>{ruler.role} {ruler.name}</b><span>{house.name}</span></div></div>
+      : <div className={styles.eventArt} data-key={ev.key}>{ev.key === 'seca' ? <ResourceIcon resource="grãos" size={44}/> : <Icon name={EVENT_ICON[ev.key] ?? 'bell'} size={40}/>}<div><b>{p?.name ?? player.name}</b><span>{p ? `${p.population.toLocaleString('pt-BR')} habitantes · lealdade ${p.loyalty}%` : ''}</span></div><Crest heraldry={heraldryOf(game, player)} size={40}/></div>
   } else {
     title = decision.kind === 'ultimato' ? `Ultimato da ${house?.name}` : decision.kind === 'rei' ? `A coroa escreve` : `Convocação da ${house?.name}`
     text = decision.kind === 'ultimato' ? `“Serraval cresce demais. Pague ${BALANCE.politics.submitGold} de ouro e renuncie às suas ambições, ou tomarei Pontevela.”` : decision.kind === 'rei' ? `“Hadrin envelhece, e Três Pontes precisa de mãos firmes. Pague ${BALANCE.politics.kingPactGold} de ouro à coroa e eu impedirei que ele marche contra você.”` : `“As incursões de Ardesh pedem homens. Mande ${BALANCE.politics.levyMen} dos seus a Torrealva, como manda o juramento.”`
@@ -89,7 +97,7 @@ export function DecisionScene({ game, decision, act }: { game: GameState; decisi
   }
   return <div className={styles.backdrop} data-ui>
     <section className={`${styles.sheet} ${styles.decision}`} role="dialog" aria-label={title}>
-      <span className={styles.k}>decisão · o tempo parou</span><h3>{title}</h3>
+      <span className={styles.k}>{decision.kind === 'evento' ? 'acontecimento' : 'decisão'} · o tempo parou</span><h3>{title}</h3>
       {art}
       <p className={styles.decisionText}>{text}</p>
       <div className={styles.choices}>{choices.map(c => <button key={c.id} className={styles.choice} onClick={() => choose(c.id)}><b>{c.label}</b><span>{c.detail}</span>{c.cost && <small>{c.cost}</small>}</button>)}</div>

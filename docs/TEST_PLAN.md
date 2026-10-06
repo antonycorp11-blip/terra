@@ -10,18 +10,21 @@ A bateria valida a geografia realista, o ciclo jogável do MVP (`docs/MVP_SCOPE.
 
 `src/engine/conquest.test.ts` (Vitest):
 
-- **Militar**: recrutamento com custo e limite de população; marcha, cerco, decisão de assalto, cerco prolongado, vitória com três fases, rendição e vassalagem (suserania, cor do reino, ameaça, tributo), ida e volta pelo salvamento; ataque sem justificativa custa renome e ameaça; tropas só se deslocam no próprio território.
-- **Diplomacia**: comércio recusado sem ofertas com contraproposta e devolução; comércio, aliança e vassalagem por tratado com proteção a quem se sente ameaçado.
-- **Influência**: banquete com intervalo, compra de dívida como laço, patrocínio, cerimônia de juramento.
+- **Militar**: recrutamento com custo e limite de população; marcha, cerco, decisão de assalto, cerco prolongado, vitória com três fases, rendição e juramento (as terras passam ao jogador, guarnição, governo, renda maior, recrutamento na terra nova, ameaça), ida e volta pelo salvamento; ataque sem justificativa custa renome e ameaça; tropas só se deslocam no próprio território.
+- **Diplomacia**: comércio recusado sem ofertas com contraproposta e devolução; comércio, aliança e vassalagem por tratado com proteção a quem se sente ameaçado; vassalagem bloqueada sem força em armas; a proposta só passa depois de meses de corte.
+- **Influência**: banquete com intervalo, compra de dívida como laço, patrocínio, ganho decrescente perto do juramento, cerimônia de juramento.
 - **Reações**: convocação, advertência, ultimato, guerra e defesa decidida pela muralha; oferta da coroa e proteção contra a guerra; ascensão a grão-lorde com quatro casas e o reconhecimento.
 - **Viagem e comércio**: viagem pessoal revela e estabelece contato; Ardesh recusa vender pedra; compra de prata; inverno sem sal estraga grãos.
+
+`src/engine/depth.test.ts` (Vitest): acontecimentos a cada poucos dias com consequência (8+ em 120 dias); guerra de Ardesh contra Hadrin no dia 40 e sucessão do grão-lorde; crescimento mensal da população com fatores; imposto alto rende mais e custa lealdade; governador; obras em níveis com custo crescente e quartel aumentando o recrutamento; desgaste do cerco e socorro do suserano; migração da revisão 2.
 
 `tests/e2e/map.spec.ts` (Playwright):
 
 - Criação da casa em três etapas.
 - Lordes de corpo inteiro no mapa; carta da casa com figura; as quatro visões mudam o mapa e a carta; filtro de recurso; zoom sem recentralizar.
-- Conquista militar completa na interface: marcha, convocação respondida, cerco, tática, batalha animada, rendição, vassala na carta e no contador de casas.
-- Conversa com o duário mostrando a segunda consciência e o intervalo de repetição.
+- Conquista militar completa na interface, respondendo acontecimentos e cartas pelo caminho: marcha, cerco, tática, batalha animada, rendição, o lorde vencido sai do mapa, o estandarte do jogador aparece e a terra nova aceita imposto.
+- Conversa com o duário mostrando a segunda consciência, o intervalo de repetição e o assunto "Do que precisam".
+- Um acontecimento pausa o tempo e é resolvido.
 - Convocação pausando o tempo.
 - Salvar e carregar.
 - Celular em paisagem (844×390) sem rolagem horizontal e com HUD sem sobreposição.

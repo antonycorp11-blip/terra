@@ -7,11 +7,13 @@ import { assault } from './military'
 import { makeVassal, type Terms } from './vassals'
 import { liegeHouse, sovereign, declareWar } from './politics'
 import { newArmy, armyRoute } from './military'
+import { resolveEvent } from './events'
 
 export const openDecisions = (g: GameState) => g.campaign.decisions.filter(d => !d.resolved)
 export interface Choice { id: string; label: string; detail: string; cost?: string }
 /** The options each decision offers, with their consequences spelled out for the player. */
 export function choicesFor(g: GameState, d: Decision): Choice[] {
+  if (d.kind === 'evento') return d.event!.choices
   const P = BALANCE.politics, M = BALANCE.military
   switch (d.kind) {
     case 'assalto': {
@@ -24,8 +26,8 @@ export function choicesFor(g: GameState, d: Decision): Choice[] {
       return list
     }
     case 'submissão': case 'juramento': return [
-      { id: 'generosos', label: 'Termos generosos', detail: `Tributo de ${BALANCE.vassal.tribute.generosos * 100}% e lealdade mais alta. A casa fica do seu lado por gosto.` },
-      { id: 'firmes', label: 'Termos firmes', detail: `Tributo de ${BALANCE.vassal.tribute.firmes * 100}% e lealdade mais baixa. Mais renda, mais risco de rebelião.` },
+      { id: 'generosos', label: 'Termos generosos', detail: 'As terras passam a ser suas, mas o antigo lorde governa a sede em seu nome. Menos revolta, lealdade mais alta.' },
+      { id: 'firmes', label: 'Termos firmes', detail: 'As terras passam a ser suas e a família perde todo o governo. Lealdade baixa, risco de revolta.' },
     ]
     case 'ultimato': return [
       { id: 'submeter', label: 'Ceder ao grão-lorde', detail: `Pagar ${P.submitGold} de ouro. A ameaça cai ${P.submitRelief} pontos e a paz volta, por ora.`, cost: `${P.submitGold} ouro` },
@@ -50,6 +52,7 @@ export function resolveDecision(game: GameState, decisionId: Id, choice: string)
   const path = dec.choice === 'diplomacia' ? 'diplomacia' : dec.choice === 'influência' ? 'influência' : 'militar'
   dec.resolved = true
   switch (dec.kind) {
+    case 'evento': resolveEvent(g, dec, choice); break
     case 'submissão': case 'juramento': dec.choice = choice; makeVassal(g, dec.houseId!, dec.kind === 'submissão' ? 'militar' : path, choice as Terms); break
     case 'ultimato':
       dec.choice = choice

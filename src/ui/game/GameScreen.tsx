@@ -15,7 +15,8 @@ import { fmt, signed, daysLabel, type Act } from '../parts'
 import { houseOf, upcoming } from '../view'
 import ProvinceCard from './ProvinceCard'
 import LensSummary from './LensSummary'
-import { HousesSheet, ConversationSheet, PlanSheet, NegotiationSheet, MenuSheet, ChronicleSheet } from './Sheets'
+import { HousesSheet, PlanSheet, MenuSheet, ChronicleSheet } from './Sheets'
+import { ConversationScene, NegotiationScene } from './Audience'
 import { DecisionScene, BattleScene } from './Scenes'
 import styles from './Game.module.css'
 
@@ -40,7 +41,7 @@ export default function GameScreen({ game, setGame, act, notice, setNotice, io }
   useEffect(() => { if (!notice) return; const t = window.setTimeout(() => setNotice(null), notice.important ? 9000 : 5200); return () => window.clearTimeout(t) }, [notice]) // eslint-disable-line react-hooks/exhaustive-deps
   const setSpeed = (speed: 0 | 1 | 2 | 3) => setGame({ ...game, speed })
   const date = dateFromDay(game.day)
-  const pins = upcoming(game).filter(p => p.day - game.day <= 30).slice(0, 6)
+  const pins = upcoming(game).filter(p => p.day - game.day <= 30).slice(0, tlWidth < 560 ? 3 : 6)
   const span = 36
   const rank = isGrandLord(game) ? 'grão-lorde' : 'lorde'
   const select = (id: Id | null) => ui.select(id)
@@ -97,9 +98,9 @@ export default function GameScreen({ game, setGame, act, notice, setNotice, io }
     {notice && <button className={`${styles.toast} ${notice.error ? styles.toastError : notice.important ? styles.toastImportant : ''}`} onClick={() => { if (notice.provinceId) ui.focusProvince(notice.provinceId); setNotice(null) }} aria-live="polite"><b>{notice.title}</b>{notice.text && <span>{notice.text}</span>}</button>}
 
     {ui.sheet?.kind === 'houses' && <HousesSheet game={game} onClose={() => ui.openSheet(null)} onPick={id => { ui.openSheet(null); ui.focusProvince(id) }}/>}
-    {ui.sheet?.kind === 'conversation' && <ConversationSheet game={game} characterId={ui.sheet.characterId} act={act} onClose={() => ui.openSheet(null)}/>}
+    {ui.sheet?.kind === 'conversation' && <ConversationScene game={game} characterId={ui.sheet.characterId} act={act} onClose={() => ui.openSheet(null)}/>}
     {ui.sheet?.kind === 'plan' && <PlanSheet game={game} provinceId={ui.sheet.provinceId} path={ui.sheet.path} onClose={() => ui.openSheet(null)} onLens={l => { ui.setLens(l); ui.openSheet(null) }}/>}
-    {ui.sheet?.kind === 'negotiation' && <NegotiationSheet game={game} negotiationId={ui.sheet.negotiationId} act={act} onClose={() => ui.openSheet(null)}/>}
+    {ui.sheet?.kind === 'negotiation' && <NegotiationScene game={game} negotiationId={ui.sheet.negotiationId} act={act} onClose={() => ui.openSheet(null)}/>}
     {ui.sheet?.kind === 'menu' && <MenuSheet game={game} io={io} onClose={() => ui.openSheet(null)} onChronicle={() => ui.openSheet({ kind: 'chronicle' })}/>}
     {ui.sheet?.kind === 'chronicle' && <ChronicleSheet game={game} onClose={() => ui.openSheet(null)} onPick={id => { ui.openSheet(null); ui.focusProvince(id) }}/>}
     {ui.sheet?.kind === 'battle' && <BattleScene game={game} battleId={ui.sheet.battleId} onClose={() => ui.openSheet(null)}/>}

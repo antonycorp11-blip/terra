@@ -365,6 +365,10 @@ export default function MapView({ game, lens, selectedId, resourceFilter, focus,
           <span className={styles.base} style={{ ['--hc' as string]: mapColor(game, house.id) }}/>
         </button>
       })}
+      {controlled(game).filter(p => p.id !== houseOf(game, game.playerHouseId).seatProvinceId).map(p => ({ p, pos: S(castleAt(p)) })).filter(x => onScreen(x.pos)).map(({ p, pos }) =>
+        <button key={`banner-${p.id}`} type="button" data-ui className={styles.banner} style={{ left: pos[0], top: pos[1] }} onClick={() => onSelect(p.id)} aria-label={`${p.name}, sua província`}>
+          <span className={styles.flag}><Crest heraldry={game.campaign.customization.heraldry} size={22}/></span><span className={styles.pole}/>
+        </button>)}
       {game.campaign.armies.map(a => { const pos = S(armyPosition(game, a)), mineArmy = a.houseId === game.playerHouseId, house = houseOf(game, a.houseId); return <div key={a.id} className={`${styles.army} ${mineArmy ? styles.armyMine : styles.armyFoe}`} style={{ left: pos[0], top: pos[1] }}>
         <Crest heraldry={heraldryOf(game, house)} size={18}/><span>{a.men}{a.status === 'sitiando' ? ' · cerco' : a.status === 'pronto' ? ' · pronto' : ''}</span>
       </div> })}
