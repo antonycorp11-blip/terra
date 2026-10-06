@@ -71,9 +71,14 @@ test('o mapa mostra lordes de corpo inteiro; tocar abre a carta da casa e as vis
   await expect(page.getByText('Seu peso no feudo')).toBeVisible()
   await expect(card(page).getByText('influência', { exact: true })).toBeVisible()
   // Camera moves only by command: zoom buttons work and time does not recentre the map.
-  const before = await page.locator('[class*="world"]').first().getAttribute('style')
+  const before = await lord(page, 'Casa Hadrin').getAttribute('style')
   await page.getByRole('button', { name: 'Aproximar' }).click()
-  await expect.poll(() => page.locator('[class*="world"]').first().getAttribute('style')).not.toBe(before)
+  await expect.poll(() => lord(page, 'Casa Hadrin').getAttribute('style')).not.toBe(before)
+  // Tapping the map itself selects the province under the finger.
+  await page.getByRole('button', { name: 'Fechar' }).first().click()
+  const box = await lord(page, 'Casa Morvane').boundingBox()
+  await page.mouse.click(box!.x + box!.width / 2, box!.y + box!.height + 6)
+  await expect(card(page)).toBeVisible()
 })
 
 test('conquista militar: marcha, cerco, tática, batalha animada e juramento mudam o mapa', async ({ page }) => {
@@ -153,4 +158,18 @@ test('celular na horizontal: mapa em tela cheia e HUD sem sobreposição', async
   await expect(card(page).getByRole('heading', { name: 'Casa Vasterre' })).toBeVisible()
   const box = await card(page).boundingBox()
   expect(box!.x + box!.width).toBeLessThanOrEqual(844)
+})
+
+test.describe('iPhone 15 Pro Max na horizontal', () => {
+  test.use({ viewport: { width: 932, height: 430 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true })
+  test('desenha o mapa na resolução nativa e responde ao toque', async ({ page }) => {
+    await foundHouse(page)
+    // The canvas matches the screen's device pixels, so nothing is upscaled.
+    await expect.poll(() => page.evaluate(() => document.querySelector('canvas')!.width)).toBeGreaterThanOrEqual(932 * 2.5)
+    await lord(page, 'Casa Hadrin').tap()
+    await expect(card(page).getByRole('heading', { name: 'Casa Hadrin' })).toBeVisible()
+    await expect(card(page).locator('img[src*="/lords/card/"]')).toBeVisible()
+    const width = await page.evaluate(() => document.documentElement.scrollWidth)
+    expect(width).toBeLessThanOrEqual(932)
+  })
 })

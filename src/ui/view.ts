@@ -62,3 +62,5 @@ export function upcoming(g: GameState): Pin[] {
   pins.push({ day: winter, kind: 'inverno', text: 'celeiros precisam de sal', tone: 'grey', provinceId: null })
   return pins.filter(p => p.day > g.day).sort((a, b) => a.day - b.day)
 }
+/** Large figure for cards, conversations and scenes (the map uses the light version). */
+export const cardUrl = (file: string) => assetUrl(file.replace('assets/lords/', 'assets/lords/card/'))

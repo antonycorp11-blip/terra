@@ -14,7 +14,7 @@ import Crest from '../Heraldry'
 import Icon from '../Icons'
 import type { Lens } from '../store'
 import { fmt, longDate, type Act } from '../parts'
-import { assetUrl, heraldryOf, houseOf, mapColor } from '../view'
+import { assetUrl, cardUrl, heraldryOf, houseOf, mapColor } from '../view'
 import type { SaveIO } from './GameScreen'
 import styles from './Game.module.css'
 
@@ -74,7 +74,7 @@ export function ConversationSheet({ game, characterId, act, onClose }: { game: G
   return <Sheet title={c.name} sub={`${c.role} · ${house.name} · ${RACE_LABEL[c.race]} · ${c.age} anos`} onClose={onClose} wide>
     <div className={styles.convo}>
       <div className={styles.convoFigure} style={{ ['--hc' as string]: mapColor(game, house.id) }}>
-        {c.portraitAsset ? <img src={assetUrl(c.portraitAsset)} alt={c.name}/> : <Crest heraldry={heraldryOf(game, house)} size={96}/>}
+        {c.portraitAsset ? <img src={cardUrl(c.portraitAsset)} alt={c.name}/> : <Crest heraldry={heraldryOf(game, house)} size={96}/>}
         <div className={styles.rings}>{ring('confiança', c.relationship.trust)}{ring('respeito', c.relationship.respect)}{ring('amizade', c.relationship.friendship)}</div>
         {c.second && <div className={styles.second}><b>{c.second.name}</b>, a outra consciência: amizade {c.second.relationship.friendship}, confiança {c.second.relationship.trust}</div>}
       </div>
@@ -125,7 +125,7 @@ export function NegotiationSheet({ game, negotiationId, act, onClose }: { game: 
             <text x="30" y="88" textAnchor="middle" className={styles.scaleText}>sua oferta {score}</text><text x="190" y="88" textAnchor="middle" className={styles.scaleText}>exigem {needed}</text></g>
         </svg>
         <p className={score >= needed ? styles.goodTxt : styles.small}>{score >= needed ? 'A balança pende para o seu lado. Eles devem aceitar.' : `Faltam ${needed - score} pontos.`} {threat ? `A casa ${threat}.` : ''}</p>
-        {ruler.portraitAsset && <img className={styles.negoFigure} src={assetUrl(ruler.portraitAsset)} alt={ruler.name}/>}
+        {ruler.portraitAsset && <img className={styles.negoFigure} src={cardUrl(ruler.portraitAsset)} alt={ruler.name}/>}
       </div>
       <div>
         <div className={styles.offers}>{offers.map(o => { const on = picked.includes(o.kind); return <button key={o.kind} className={`${styles.offer} ${on ? styles.on : ''}`} disabled={!o.available || waiting} onClick={() => setPicked(on ? picked.filter(k => k !== o.kind) : [...picked, o.kind])}>

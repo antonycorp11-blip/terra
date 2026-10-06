@@ -6,7 +6,7 @@ import { defenders, wallLevel } from '../../engine/military'
 import { BALANCE } from '../../engine/balance'
 import Crest from '../Heraldry'
 import { type Act } from '../parts'
-import { assetUrl, heraldryOf, houseOf, mapColor, provinceOf } from '../view'
+import { cardUrl, heraldryOf, houseOf, mapColor, provinceOf } from '../view'
 import styles from './Game.module.css'
 
 function Soldier({ x, y, color, flip, fallen }: { x: number; y: number; color: string; flip?: boolean; fallen?: boolean }) {
@@ -79,13 +79,13 @@ export function DecisionScene({ game, decision, act }: { game: GameState; decisi
     text = decision.kind === 'submissão' ? `${ruler?.name} ajoelha diante de Irian. A casa vai jurar lealdade; os termos são seus.` : `${ruler?.name} aceita jurar lealdade à ${player.name}. Que termos você oferece?`
     art = <div className={styles.oath}>
       <Crest heraldry={heraldryOf(game, player)} size={70}/>
-      {ruler?.portraitAsset ? <img className={styles.kneel} src={assetUrl(ruler.portraitAsset)} alt={ruler.name}/> : <span/>}
+      {ruler?.portraitAsset ? <img className={styles.kneel} src={cardUrl(ruler.portraitAsset)} alt={ruler.name}/> : <span/>}
       <Crest heraldry={heraldryOf(game, house!)} size={56}/>
     </div>
   } else {
     title = decision.kind === 'ultimato' ? `Ultimato da ${house?.name}` : decision.kind === 'rei' ? `A coroa escreve` : `Convocação da ${house?.name}`
     text = decision.kind === 'ultimato' ? `“Serraval cresce demais. Pague ${BALANCE.politics.submitGold} de ouro e renuncie às suas ambições, ou tomarei Pontevela.”` : decision.kind === 'rei' ? `“Hadrin envelhece, e Três Pontes precisa de mãos firmes. Pague ${BALANCE.politics.kingPactGold} de ouro à coroa e eu impedirei que ele marche contra você.”` : `“As incursões de Ardesh pedem homens. Mande ${BALANCE.politics.levyMen} dos seus a Torrealva, como manda o juramento.”`
-    art = <div className={styles.letter}>{ruler?.portraitAsset && <img src={assetUrl(ruler.portraitAsset)} alt={ruler.name}/>}<div><Crest heraldry={heraldryOf(game, house!)} size={44}/><b>{ruler?.role} {ruler?.name}</b><span>{house?.name}</span></div></div>
+    art = <div className={styles.letter}>{ruler?.portraitAsset && <img src={cardUrl(ruler.portraitAsset)} alt={ruler.name}/>}<div><Crest heraldry={heraldryOf(game, house!)} size={44}/><b>{ruler?.role} {ruler?.name}</b><span>{house?.name}</span></div></div>
   }
   return <div className={styles.backdrop} data-ui>
     <section className={`${styles.sheet} ${styles.decision}`} role="dialog" aria-label={title}>

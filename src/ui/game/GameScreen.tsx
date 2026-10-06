@@ -93,6 +93,7 @@ export default function GameScreen({ game, setGame, act, notice, setNotice, io }
     </footer>
     <div className={styles.zoom}><button onClick={() => mapZoom('in')} aria-label="Aproximar"><Icon name="plus" size={16}/></button><button onClick={() => mapZoom('out')} aria-label="Afastar"><Icon name="minus" size={16}/></button></div>
 
+    <div className={styles.rotate} data-ui><Icon name="territorio" size={34}/><b>Gire o celular</b><span>Varedor foi feito para a tela deitada.</span></div>
     {notice && <button className={`${styles.toast} ${notice.error ? styles.toastError : notice.important ? styles.toastImportant : ''}`} onClick={() => { if (notice.provinceId) ui.focusProvince(notice.provinceId); setNotice(null) }} aria-live="polite"><b>{notice.title}</b>{notice.text && <span>{notice.text}</span>}</button>}
 
     {ui.sheet?.kind === 'houses' && <HousesSheet game={game} onClose={() => ui.openSheet(null)} onPick={id => { ui.openSheet(null); ui.focusProvince(id) }}/>}

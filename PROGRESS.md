@@ -21,6 +21,13 @@ Direção definida com o jogador em três rodadas de maquete. Escopo e valores e
 - `npm run test:ui`: 7 fluxos Playwright, incluindo a conquista militar completa e o celular a 844×390.
 - `npm run build`: sem erros.
 
+### Correções para celular (05/10/2026)
+
+- Mapa desenhado em canvas na resolução nativa da tela (até 3×), com redesenho só quando o gesto termina ou algo visível muda; durante o gesto a imagem anterior é deslocada por CSS. Antes, camadas SVG com máscaras eram ampliadas e redesenhadas a cada movimento no Safari.
+- Figuras dos lordes em duas versões: leve no mapa e em alta resolução (até 1.080 px) nas cartas, conversas e cenas.
+- Relevo em duas passadas no worker (rápida e nítida); geração do mundo em worker; zoom do Safari bloqueado (viewport, gestos e toque duplo).
+- Aviso para girar o celular na vertical.
+
 ### Limitações conhecidas
 
 - As outras casas reagem ao jogador, mas não fazem guerras ou alianças entre si.

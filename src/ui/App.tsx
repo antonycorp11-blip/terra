@@ -51,8 +51,14 @@ export default function App() {
   }
   function startCreation() {
     setPreparing(true)
-    // Defer the heavy world generation so the button state paints first.
-    window.setTimeout(() => { setBase(createGame()); setScreen('creation'); setPreparing(false) }, 30)
+    // World generation runs in a worker; if workers fail, fall back to the main thread.
+    const done = (g: GameState) => { setBase(g); setScreen('creation'); setPreparing(false) }
+    try {
+      const worker = new Worker(new URL('./worldWorker.ts', import.meta.url), { type: 'module' })
+      worker.onmessage = (e: MessageEvent<GameState>) => { worker.terminate(); done(e.data) }
+      worker.onerror = () => { worker.terminate(); window.setTimeout(() => done(createGame()), 30) }
+      worker.postMessage(null)
+    } catch { window.setTimeout(() => done(createGame()), 30) }
   }
   function found(name: string, heraldry: Heraldry) {
     try {

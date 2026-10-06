@@ -21,7 +21,7 @@ import Crest from '../Heraldry'
 import Icon, { ResourceIcon } from '../Icons'
 import { useUI, type Lens } from '../store'
 import { fmt, signed, type Act } from '../parts'
-import { assetUrl, heraldryOf, houseOf, levelOf, provinceOf } from '../view'
+import { cardUrl, heraldryOf, houseOf, levelOf, provinceOf } from '../view'
 import styles from './Game.module.css'
 
 interface Props { game: GameState; provinceId: Id; lens: Lens; act: Act; onClose: () => void }
@@ -53,7 +53,7 @@ export default function ProvinceCard({ game, provinceId, lens, act, onClose }: P
   </>
   return <aside className={styles.card} data-ui aria-label={`Província ${level === 'known' ? p.name : ''}`}>
     <button className={styles.cx} onClick={onClose} aria-label="Fechar"><Icon name="close" size={16}/></button>
-    {level === 'known' && ruler?.portraitAsset && <img className={styles.cardFigure} src={assetUrl(ruler.portraitAsset)} alt={`${ruler.name}, ${house.name}`}/>}
+    {level === 'known' && ruler?.portraitAsset && <img className={styles.cardFigure} src={cardUrl(ruler.portraitAsset)} alt={`${ruler.name}, ${house.name}`}/>}
     <div className={styles.cardBody}>
       {level === 'known' && <div className={styles.k}>{p.name} · {fief.name} · {realm.name}</div>}
       {body}
