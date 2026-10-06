@@ -1,50 +1,47 @@
 # Arquitetura técnica
 
-Decisões da Fase 1: React, TypeScript, Vite e CSS modular; motor em `src/engine`, separado de `src/ui`; IndexedDB e Zustand apenas para estado transitório da interface.
+React, TypeScript, Vite e CSS modular; motor em `src/engine`, independente de React; Zustand apenas para estado transitório da interface; IndexedDB para salvamentos; um Web Worker pinta o relevo.
 
-A revisão geográfica 3 usa `landPolygons` (continente e 16 ilhas), preservando `landPolygon` como contorno principal. Cada província expõe `polygons` para conservar todos os fragmentos de recorte e `polygon` como polígono principal que contém o centro. `landmass` identifica sua massa terrestre. As 252 províncias cobrem todas as terras, mantendo 7 reinos, 42 feudos, 1.008 assentamentos e 133 casas. A alocação cresce pela malha com pesos desiguais; as áreas dos reinos variam. As províncias têm nomes únicos mesmo com feudos de quantidades variáveis.
-
-`neighbors` representa apenas adjacência terrestre, com segmentos verificados dentro da terra. `maritimeLinks` registra os vínculos administrativos das ilhas ao continente para alocação territorial; não permite caminhada nem cria estradas marítimas. A busca terrestre retorna rota vazia para ilhas. Transporte de tropas e cargas por portos ainda depende do sistema naval.
-
-`src/engine/seafaring.ts` calcula oito trajetos de ambientação em uma grade navegável sobre água com margem do litoral. `MapShips` percorre esses trajetos com um relógio visual independente da simulação, usando um único ciclo de animação e respeitando redução de movimento. Os navios não representam recursos ou comércio persistente. Os portos têm posições próximas à costa dentro da própria província. `routes.ts` mantém as estradas, a busca ponderada e rios descendentes com foz na costa.
-
-`src/ui/mapArt.ts` monta reservas espaciais para nomes e assentamentos. A direção atual é cartografia política, sem decoração de vegetação. `MapSprites` reutiliza apenas construções e barcos do atlas; nomes curvos usam SVG `textPath`, e limites/rios usam `vector-effect` para manter espessuras legíveis no zoom. Cores políticas não são misturadas com biomas. Os dados territoriais e cliques permanecem SVG.
-
-Salvamentos anteriores a `geographyRevision: 3` são regenerados com a nova geografia, preservando calendário, história, recursos das casas e população/lealdade da sede do jogador. A titularidade inicial segue a nova hierarquia. Hidrografia física detalhada, pontes, transporte naval, economia entre casas e IA permanecem para fases posteriores.
-
-A audiência inicial de Pontevela fica em `src/engine/audience.ts`: aplica uma escolha uma única vez, modifica recursos e lealdade em estado imutável e acrescenta um registro histórico persistente. A apresentação da conversa fica na cena do castelo, em `src/ui/App.tsx`.
-
-## Arquitetura do MVP (Descobrir · Influenciar · Conquistar)
-
-O estado persistente é `GameState` versão 2: `world` (geografia e domínio político) mais `campaign: CampaignData` (`src/engine/mvpTypes.ts`), que contém `customization`, `knowledge`, `expeditions`, `investments`, `ledger`, `characters`, `contacts`, `diplomacy`, `agents`, `spyMissions`, `reports`, `conversations`, `notifications` e o contador `nextId`. As regras ficam em módulos puros do motor:
+## Geografia (revisão 4)
 
 | Módulo | Responsabilidade |
 |---|---|
-| `balance.ts` | Única fonte dos valores de balanceamento |
-| `stateUtils.ts` | `editGame` (cópia rasa da geometria imutável e clonagem do estado mutável), `spend`, `nextId`, `record` |
-| `campaign.ts` | Cria `CampaignData` para jogos novos e para salvamentos da versão 1 |
-| `heraldry.ts`, `houseCustomization.ts` | Opções de brasão, validação do nome, fundação da casa (só no dia 0) |
-| `knowledge.ts` | Níveis de conhecimento, avistamento de vizinhos, `knownRoute` (BFS só por terra conhecida) |
-| `exploration.ts` | Orçamento, envio e resolução de expedições; achados lidos dos dados reais |
-| `economy.ts`, `investments.ts` | Balanço mensal calculado só a partir de `BALANCE`, obras concluídas e acordos; eventos locais |
-| `characters.ts`, `relationships.ts`, `dialogue.ts` | Personagens determinísticos com IDs persistentes (`ruler-<casa>`, `counsel-<casa>`, `court-n`, `candidate-n`), relação inicial explicada, conversas com intervalos e memória |
-| `diplomacy.ts`, `espionage.ts` | Emissário, presente, aproximação, audiência, comércio; contratação, missões e relatórios |
-| `notifications.ts` | Fila de acontecimentos; `important` marca o que pausa o tempo |
-| `simulation.ts` | `advanceGame` processa um dia por vez, na mesma ordem, de forma determinística |
+| `terrain.ts` | Ruído de valor, `terrainField` (distância assinada à costa oficial numa grade de 8 px, por baldes de segmentos), `elevationAt` (costa + ruído + relevo interior + três cordilheiras) e `moistureAt`. Usado pelo motor e pelo worker do relevo, então costa, rios e fronteiras coincidem. |
+| `mesh.ts` | Malha de Voronoi (~8.300 células, espaçamento 10,5) memorizada por semente; ilhotas com menos de 7 células voltam ao mar; drenagem por *priority flood* (`parent`, `flow`); `partitionProvinces` gera exatamente 252 províncias (uma por ilha, o restante por amostragem do ponto mais distante ponderada pela fertilidade, depois Dijkstra multifonte com custo de serra e de travessia de rio); `traceLabelRings` traça contornos; `traceRivers` extrai os rios. |
+| `world.ts` | Monta províncias (contorno incluindo um anel de células de mar, para o recorte pela costa pintada; centro = polo de inacessibilidade; ângulo do rótulo pela elongação), reinos e feudos com `allocateConnected` penalizando montanhas, 133 casas (Três Pontes com cinco casas autorais), 1.008 assentamentos posicionados nas células da província e produção apportionada pelos tipos de assentamento. |
+| `names.ts`, `portraits.ts` | Nomes curados de províncias e casas; catálogo das figuras de lordes com raça e sexo do desenho. |
 
-Invariantes:
+Invariantes: contagens canônicas; toda célula de terra pertence a uma província; vizinhança só por terra; `maritimeLinks` liga ilhas sem permitir marcha; rios seguem `parent`; `labelAngle` nunca é `-0` (JSON). Salvamentos com geografia 3 são regenerados (`migrateGeography`): preservam identidade da casa, ouro, estoques, renome, calendário e crônica; a campanha recomeça no mapa novo.
 
-- Nenhuma regra procura a casa do jogador pelo nome; usam-se `playerHouseId` e `seatProvinceId`.
-- `advanceGame(g, n)` equivale a n chamadas de `advanceGame(g, 1)`. Os sorteios usam `hash` sobre IDs e dias, nunca `Math.random` nem o relógio do sistema. `updatedAt` só muda no envelope de persistência.
-- Toda ação valida o custo e o pré-requisito com `requireRule` e lança uma mensagem legível, que a interface mostra.
-- `migrateGame` aceita as versões 1 e 2: aplica a migração geográfica e cria `campaign` quando ausente.
+## Estado persistente
 
-### Interface
+`GameState` versão 3 = `world` + `campaign: CampaignData` revisão 2 (`mvpTypes.ts`). Além de conhecimento, expedições, obras, personagens, contatos, agentes, relatórios, conversas e notificações, a campanha guarda `garrisons`, `armies`, `battles`, `claims`, `bonds`, `vassals`, `influence`, `influenceCooldowns`, `negotiations`, `decisions`, `politics`, `travel` e `purchases`. `House.stock` tem os seis recursos; `House.prestige` é o renome; `Province.resources`, `area` e `labelAngle` são novos.
 
-- `src/ui/store.ts` guarda apenas estado transitório: modo, seleção, aba, painel recolhido e pedidos de foco de câmera.
-- `App.tsx` mantém `gameRef` como fonte única para sequenciar ações do jogador e ticks do relógio sem perder nenhum dos dois.
-- `MapView.tsx` memoriza toda a geometria por `world.seed`, então caminhos, contornos fundidos de reinos e feudos, rótulos e centros nunca são recalculados por avanço de calendário. A camada de províncias é um `memo` que só se redesenha quando muda o conhecimento, o modo ou as relações. A névoa usa uniões de polígonos (`unionPath`, com buracos e `evenodd`) por nível de conhecimento, para que nenhuma fronteira interna vaze. Fronteiras de reino, feudo e província têm espessuras distintas, com `vector-effect: non-scaling-stroke`. O nível de detalhe depende da escala; a roda do mouse usa um ouvinte nativo não passivo; há suporte a pinça.
-- `DiscoverPanel`, `InfluencePanel` e `ConquerPanel` apenas leem o estado e chamam ações do motor por meio de `act`.
+## Regras
+
+| Módulo | Responsabilidade |
+|---|---|
+| `balance.ts` | Única fonte de valores |
+| `stateUtils.ts` | `editGame` (cópia do estado mutável, geometria compartilhada), `pay` e `missing` (custos com mensagem do que falta), `controlled`, `isVassal`, `inPlayerRealm` |
+| `economy.ts` | Produção lida dos assentamentos, administração e consumo por população, tributo de vassalos, manutenção de tropas e agentes, inverno e sal |
+| `military.ts` | Muralhas, defensores, recrutamento, muralhas, deslocamento, rotas, marcha, cerco, `resolveBattle` determinístico (hash), assalto com tática, defesa contra exércitos inimigos, posição interpolada para o mapa |
+| `negotiation.ts` | Ofertas com custo e valor por casa, pontuação, rodadas, resposta após a viagem do emissário, devolução do custo na recusa |
+| `influence.ts` | Influência por casa, banquete, patrocínio, casamento, compra de dívida, laços, cerimônia de juramento |
+| `vassals.ts` | `makeVassal` (suserania das províncias, cor, ameaça, coroa, renome), lealdade e renúncia |
+| `politics.ts` | Tributo, convocação, advertência, ultimato, guerra, oferta da coroa, ascensão a grão-lorde |
+| `travel.ts` | Viagem pessoal do lorde e compra de recursos |
+| `decisions.ts` | Decisões que pausam o tempo, com opções e consequências descritas, e `resolveDecision` |
+| `plans.ts` | Etapas reais dos três caminhos de conquista |
+| `characters.ts`, `dialogue.ts` | Raça, figura, segunda consciência dos duários (responde e tem relação própria) |
+
+`advanceGame` processa por dia: obras, expedições, viagem, diplomacia, negociações, espionagem, exército, política, vassalos, influência, economia, estações, eventos locais. Sorteios usam `hash` sobre IDs e dias; N dias de uma vez equivalem a N passos.
+
+## Interface
+
+- `App.tsx`: telas (título, criação, jogo), relógio (pausa automática em notificação importante ou decisão aberta), autosave a cada 30 dias, ações via `act`.
+- `MapView.tsx`: relevo pintado pelo `map/terrainWorker.ts` (cores por bioma, sombreamento, máscara de terra), árvores, picos, estradas e rios desenhados por cima em canvas 2×; províncias, névoa, fronteiras (`map/geometry.ts`, arestas compartilhadas classificadas como província, feudo, reino, fundida ou oculta), seleção, rótulos e visões em SVG recortado pela máscara da costa; lordes, exércitos e viagem como elementos HTML contra-escalados. A câmera é transformada sem re-render do React.
+- `game/GameScreen.tsx` (HUD, linha do tempo, visões, avisos), `game/ProvinceCard.tsx` (carta por visão e situação), `game/LensSummary.tsx`, `game/Sheets.tsx` (Casas, conversa, plano, negociação, menu, crônica), `game/Scenes.tsx` (decisões e batalha animada).
+- Em desenvolvimento, `window.__terra` expõe `{ game, setGame }` para os testes de interface; não existe no build de produção.
 
 # 25. ARQUITETURA DE SOFTWARE
 

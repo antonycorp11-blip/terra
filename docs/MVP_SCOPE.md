@@ -1,64 +1,73 @@
 # ESCOPO DO MVP ATUAL
 
-Este documento descreve **apenas o que está implementado e jogável agora**. A **VISÃO FINAL DO JOGO** continua em `docs/GDD.md` e nos documentos temáticos; nada daquela visão foi descartado, apenas adiado.
+Este documento descreve **apenas o que está implementado e jogável agora**. A **VISÃO FINAL DO JOGO** continua em `docs/GDD.md` e nos documentos temáticos; as raças estão em `docs/RACES.md`. Nada da visão foi descartado, apenas adiado.
 
-> Um mundo gigante. Três formas de jogar. Uma interface simples.
+> Um mundo vivo. Três caminhos para conquistar. Uma interface simples.
 
-## Interface
+## A tela
 
-- Uma única tela principal: o mapa de Varedor. Na parte inferior há três modos: **Descobrir**, **Influenciar** e **Conquistar**.
-- O HUD superior mostra brasão, nome da casa, ouro, alimentos, madeira, ferro, influência, data e velocidade do tempo, além do sino de notificações.
-- O painel contextual fica à direita no desktop. No celular em paisagem é uma gaveta lateral recolhível (até 44% da largura); em retrato é uma folha inferior recolhível.
-- O zoom é contínuo (roda, pinça, botões). A densidade de detalhes muda com a escala: nomes de reino, depois de feudo, depois de província, ícones de assentamento e por fim os nomes dos assentamentos. Não há mais navegação em quatro páginas.
-- A câmera só se move por comando do jogador, por um clique numa notificação ou para impedir que a seleção fique escondida sob o painel. O avanço do calendário nunca reposiciona a câmera.
+- Uma única tela: o mapa de Varedor em tela cheia, com zoom (roda, pinça, botões) e arraste. A câmera só se move por comando do jogador ou ao tocar numa notificação.
+- **Topo**: brasão e nome da casa (abre o menu), ambição (lorde → grão-lorde → rei → unificação) com o apoio atual, botão **Casas**, ouro, **renome**, os seis recursos (em vermelho quando zerados), data e velocidade.
+- **Base**: linha do tempo com o que está chegando nos próximos 36 dias (batedores, emissários, respostas, exércitos, assaltos, balanço, tributo, inverno) e as **quatro visões**.
+- **Carta**: ao tocar uma província aparece uma carta de pergaminho à direita com a casa em destaque (brasão, nome, lema, lorde, raça, idade, traços, relação, personalidade) e o lorde de corpo inteiro ao lado. O conteúdo muda com a visão e com quem governa a província.
+- **Lordes no mapa**: cada casa conhecida tem seu lorde de corpo inteiro de pé sobre a sede. Tocar o lorde abre a carta da casa; o selecionado cresce e brilha. 60 figuras provisórias em `public/assets/lords` (cada uma usada por um único personagem; quem não tem figura aparece pelo brasão).
 
-## Criação da casa
+## As quatro visões
 
-- Nova Campanha → Sua Casa (nome) → Seu Brasão (8 divisões, 16 símbolos, 12 cores, principal e secundária) → Iniciar → **Fundar Minha Casa**.
-- Nome: 2 a 24 letras, espaços, apóstrofo ou hífen; o prefixo "Casa" é automático; nomes de casas existentes são recusados (comparação sem acento nem maiúsculas).
-- O jogador é sempre humano, governa como Irian, e começa em Velária › Três Pontes › Pontevela, no Castelo da Ponte Alta.
-- A casa é identificada por `playerHouseId` e `seatProvinceId`; nenhum sistema busca a casa pelo nome.
+| Visão | O mapa inteiro mostra | Na sua província | Numa província estrangeira |
+|---|---|---|---|
+| Território | Cores das casas sobre o relevo; névoa | População, lealdade, saldo mensal, produção, obras, corte | Casa, produz/falta, **caminhos para tomar**, emissário, conversa |
+| Diplomacia | Recursos produzidos, rotas reais (comércio, tributo, compras), o que falta; filtro por recurso | O que falta e quem vende, pactos ativos | Razões da relação, comércio → aliança → vassalagem, presente, compra de recursos |
+| Militar | Guarnições e defensores estimados, forças do feudo, exércitos em marcha | Recrutar, muralhas, deslocar tropas (estilo War) | Defensores, muralha, dias de marcha e cerco, justificativa, marchar |
+| Influência | Sua influência em cada casa, laços (◆), apoio para grão-lorde | Contratar agentes | Banquete, patrocínio, casamento, dívida, segredo, juramento |
 
-## Conhecimento e névoa
+## Mapa realista
 
-| Nível | Mapa | Informação |
-|---|---|---|
-| Desconhecida | Névoa texturizada, mesclada numa única forma | Nada |
-| Avistada | Terreno visível sob véu leve | Terreno; pode receber expedição se houver rota |
-| Explorada | Cores políticas, nome, assentamentos | Casa governante, governante, suserano, população e riqueza aproximadas |
-| Investigada | Idem | Personagens, população exata, relações; alcançada por contato, conversa ou espionagem bem-sucedida |
+- O relevo nasce da costa oficial (campo de distância assinado), ruído, três cordilheiras e umidade (`terrain.ts`). Uma malha de ~8.300 células (`mesh.ts`) calcula drenagem e rios.
+- As 252 províncias crescem sobre a malha a partir de sementes mais densas em planícies férteis e esparsas em montanhas; atravessar serras e rios custa caro, então as fronteiras param neles. Tamanhos vão de ~100 a ~5.800 unidades de área; litorais formam faixas e o nome segue o eixo da província.
+- Ilhas com tamanho suficiente são províncias próprias, ligadas ao continente por vínculo administrativo marítimo.
+- Desconhecida: hachura cinza sobre o relevo. Avistada: véu leve. Conhecida: cores da casa. O seu feudo começa conhecido; as fronteiras dele, avistadas.
+- Terras suas e de vassalos usam a cor da sua casa; a fronteira entre elas quase desaparece; vassalos têm listras finas.
 
-Início: Pontevela investigada; vizinhas avistadas; o resto desconhecido.
+## Recursos e economia
 
-## Valores de balanceamento (`src/engine/balance.ts`)
+Seis recursos: **grãos, madeira, pedra, ferro, sal, prata**; ouro é moeda e **renome** é a moeda política (recrutar, casar, ousar e atacar sem motivo custam renome). Cada província produz um ou dois recursos conforme o terreno. A produção mensal sai de uma fórmula única e é guardada nos assentamentos, de onde a economia lê.
 
-| Sistema | Valores |
+| Item | Valor |
 |---|---|
-| Economia mensal de Pontevela | +120 ouro de tributos, −40 de administração, +240 alimentos, −150 de consumo, +45 madeira, +15 ferro (saldo +80 / +90 / +45 / +15) |
-| Expedição | 60 ouro e 80 alimentos; 10 dias + 2 por etapa extra de rota + terreno (floresta +3, colina +2, montanha +6, várzea +1); no máximo 2 simultâneas |
-| Investimentos (um nível cada) | Fazendas 150 ouro + 80 madeira, 20 dias, +60 alimentos/mês · Mercado 220 + 100, 25 dias, +45 ouro/mês · Mina 180 + 80, 30 dias, +30 ferro/mês |
-| Emissário | 40 ouro; 8 dias + 2 por etapa extra |
-| Presente | 50 ouro; relação +10; intervalo de 30 dias |
-| Aproximação | 12 dias; +8 (ou +2 se a relação estiver abaixo de −25); intervalo de 30 dias |
-| Audiência | 6 dias; concedida se a relação for ≥ −15; dura 30 dias e dá +1 de respeito por conversa |
-| Comércio | Exige contato, relação ≥ 0 e rota terrestre conhecida; +18 ouro/mês enquanto as condições valerem |
-| Espiões | 90 ouro para contratar, 6 ouro/mês de manutenção, até 3; missão de 15 ouro e 14 dias + 1 por etapa; relatório válido por 60 dias |
-| Conversas | Cada assunto tem intervalo de 7 dias por personagem; pedir favor, 30 dias |
+| Pontevela | +120 ouro, −40 administração, +240 grãos, −150 consumo, +45 madeira, +15 ferro; não produz pedra, sal nem prata |
+| Estoque inicial | 700 ouro, 32 renome, 1.240 grãos, 420 madeira, 0 pedra, 180 ferro, 35 sal, 20 prata |
+| Manutenção do exército | 1 ouro por 10 homens acima de 325; exércitos em marcha comem 1 grão por 10 homens por dia |
+| Inverno | No 1º dia do inverno, sal para salgar os celeiros (pop/200); sem sal, 15% dos grãos estragam |
+| Compra | lotes de 50; preço base grãos 1, madeira 1,5, pedra 2,5, ferro 3, sal 2, prata 6 (+20% se relação < 10); casas com relação < −10 recusam |
+| Vassalos | pagam 15% (termos generosos) ou 30% (firmes) da produção; +1 renome/mês por vassalo |
 
-## Regras dos sistemas
+## Exploração
 
-- **Alcance**: expedições, emissários e espiões só seguem por províncias terrestres já exploradas. Uma província avistada é explorável quando faz fronteira com terra conhecida.
-- **Resultado da expedição**: lido dos dados reais da província (castelos e cidades, vilas, estradas, recursos de minas, serrarias, fazendas, portos e entrepostos, casa governante, governante e seu temperamento, rumor de descontentamento quando a lealdade está abaixo de 60, oportunidade de contato). Ruínas não aparecem, porque o mundo ainda não as registra.
-- **Relação inicial** (de −100 a +100): temperamento do governante, rivalidade tradicional determinística, juramento à mesma coroa, interesses, ambição, prestígio do jogador, distância e eventual espião identificado. Todas as parcelas aparecem no painel em "Por que esta relação?". Faixas: Amigável (≥ 20), Neutra (≥ 0), Desconfiada (≥ −25), Hostil.
-- **Espionagem**: pontuação determinística = sorteio (hash da missão) + intriga do agente + lealdade do agente − intriga do governante − lealdade local. Resultado: sucesso (tesouro, guarnição, lealdade, juramento e rumor marcado como não confirmado), parcial (guarnição), nada, ou identificado (relação −15 e lealdade do agente −5). Os relatórios guardam data, fonte, confiança e validade.
-- **Conversas**: Cumprimentar, Perguntar sobre sua casa, Perguntar sobre a região, Conversar sobre política, Elogiar e Solicitar favor. Personagens desconfiados ou de casas com relação negativa respondem com frieza e rendem menos. As interações alteram confiança, respeito e amizade, revelam informações e ficam na memória do personagem.
-- **Tempo**: cada dia processa obras, expedições, diplomacia, espionagem, economia (a cada 30 dias) e eventos locais (a cada 60 dias). O jogo pausa sozinho apenas para expedição concluída, primeiro contato, resposta a audiência e relatório de espionagem.
-- **Determinismo**: avançar N dias de uma vez equivale a N avanços de um dia, e salvar e carregar não altera nenhum resultado futuro.
+- **Batedores**: 60 ouro e 80 grãos; 10 dias + 2 por etapa de rota + terreno; até 2 simultâneas; achados lidos dos dados reais.
+- **Viagem pessoal de Irian**: 60% do tempo, 20 ouro, risco de emboscada (9% a 26% pelo terreno, +10% fora do reino); ao chegar, revela tudo, estabelece contato e dá +10 de confiança; emboscada custa 40 ouro, 3 de renome e 3 dias. Enquanto Irian viaja, Pontevela perde 1 de lealdade a cada 10 dias.
 
-## Conquistar
+## Conquista em etapas (`plans.ts`)
 
-O modo mostra tropas mobilizáveis, cavalos, ferro, guarnições próprias e guarnições estrangeiras conhecidas por espionagem. **Batalhas, cercos e conquistas militares estão em desenvolvimento**, e o modo não oferece nenhuma ordem militar.
+Cada província estrangeira mostra os três caminhos e o nível em cada um.
+
+- **Militar**: justificativa (reivindicação por espião em 30 dias, ou ofensa real — Ardesh) → exército (homens recomendados, caminho conhecido) → marcha visível e cerco (4 + 4×muralha dias) → **assalto com escolha de tática** (assalto direto; ao amanhecer +14% por 4 de renome; cercar e esfomear +8 dias, −32% dos defensores) → **batalha animada** → rendição com escolha de termos. Atacar sem justificativa custa 25 de renome, +15 de ameaça e piora todas as relações. Uma sede vencida vira vassala; terras do grão-lorde ficam **ocupadas** (a posse legal não muda).
+- **Diplomacia**: contato → pacto comercial → aliança → tratado de vassalagem. Cada etapa é uma **negociação com balança**: o jogador escolhe ofertas (ouro, prata, comércio, proteção, casamento, perdão de dívida) e a casa pesa relação, influência, temperamento e o que teme. A proposta viaja com o emissário; a resposta chega dias depois, com contraproposta. 3 rodadas; recusa final bloqueia por 60 dias. Limiares: 16, 40 e 80.
+- **Influência**: acesso à corte → 60% de influência (banquete +6%, patrocínio +10%, presente +4%) → um **laço** (comprar dívida, segredo descoberto por espião ou promessa de casamento) → **cerimônia de juramento** com escolha de termos.
+
+## O mundo reage (`politics.ts`, `vassals.ts`)
+
+- **Ameaça aos olhos do grão-lorde** (0–100): sobe com vassalos (militar +30, diplomacia +18, influência +15), ocupações (+30), ataques sem motivo; cai com tributo em dia e com o tempo. 40 → advertência; 60 → ultimato (pagar 200 ou recusar); 80 ou recusa → **guerra**: o exército do grão-lorde marcha e cerca sua província mais fraca; a muralha e a guarnição decidem.
+- **Convocação** no dia 25: Hadrin pede 100 homens contra Ardesh. Enviar reduz a ameaça; inventar uma desculpa aumenta.
+- **Coroa**: a simpatia cresce com seus vassalos; acima de 30 a rainha oferece proteção por 200 ouro. Com o pacto, a coroa impede a guerra do grão-lorde.
+- **Ascensão**: com 4 das casas do feudo (você incluído) e o reconhecimento da coroa ou a queda do grão-lorde, você vira **grão-lorde** de Três Pontes; o antigo grão-lorde vira seu vassalo.
+- **Vassalos** têm lealdade; termos firmes a corroem; abaixo de 15 param de pagar; abaixo de 5 renunciam ao juramento.
+- **Tributo trimestral** de 60 ouro ao suserano.
+
+## Raças no MVP
+
+O jogador é humano. As casas vizinhas mostram outras raças sem bônus fixos: Isolde Morvane (salmária), Bertram Quellan (duário — a segunda consciência, Bram, tem relação própria e fala nas conversas), Varo Ardesh (vitrânio, 212 anos), Mirela Vasterre (aurena). Demais lordes recebem raça coerente com sua figura.
 
 ## Fora deste MVP
 
-Guerras, batalhas táticas, cercos, casamentos, nascimentos, sucessão, magia, raças jogáveis, monstros, construção manual, economia comercial global, IA política para todos os reinos e árvores genealógicas completas. A arquitetura já permite essas expansões: os personagens têm IDs persistentes e a casa mantém `memberIds`; posse legal, administração, ocupação e suserania continuam distintas por província.
+Batalhas táticas em tempo real, IA autônoma das outras casas (elas reagem ao jogador, mas não guerreiam entre si), casamentos com filhos e sucessão, magia, raças jogáveis, construção manual, economia global de mercadorias, rei de Velária e unificação (a escada mostra o objetivo, mas o degrau ainda não é jogável), navegação e transporte por portos.

@@ -1,6 +1,36 @@
 # Progresso real
 
-## MVP jogável — Descobrir · Influenciar · Conquistar: concluído em 05/10/2026
+## Reestruturação — mapa realista, casas vivas e conquista em etapas: concluída em 05/10/2026
+
+Direção definida com o jogador em três rodadas de maquete. Escopo e valores em `docs/MVP_SCOPE.md`; raças em `docs/RACES.md`.
+
+### Implementado
+
+- **Mapa realista**: relevo, rios e 252 províncias de tamanhos e formas variados, com fronteiras em serras e rios, sem perder as contagens canônicas. Desconhecido em cinza hachurado, avistado sob véu, conhecido nas cores das casas.
+- **Lordes de corpo inteiro** sobre as sedes, as mesmas figuras nas cartas, na tela Casas e nas conversas (60 figuras provisórias).
+- **Interface nova**: mapa em tela cheia, HUD com ambição, renome e seis recursos, linha do tempo do que está chegando, quatro visões (Território, Diplomacia, Militar, Influência) que recolorem o mapa e mudam as ações, carta de pergaminho com a casa em destaque, tela Casas (rede, ameaça, coroa, ranking).
+- **Recursos**: grãos, madeira, pedra, ferro, sal e prata, com especialização por província, compra de quem produz e sal no inverno; renome como moeda política.
+- **Conquista em três caminhos, em etapas**: militar (justificativa, recrutamento, marcha, cerco, tática, batalha animada, rendição), diplomacia (negociação em rodadas com balança e emissário), influência (banquete, patrocínio, dívida, segredo, casamento, juramento).
+- **Mundo que reage**: vassalos na cor do jogador com fronteira quase apagada, tributo, lealdade e renúncia; ameaça do grão-lorde com convocação, advertência, ultimato e guerra; oferta da coroa; ascensão a grão-lorde.
+- **Viagem pessoal** do lorde com risco, e tropas por província com deslocamento ao estilo War.
+- **Raças** nas casas vizinhas, sem bônus fixos; duários com segunda consciência nas conversas.
+
+### Validação em 05/10/2026
+
+- `npm test`: 38 testes (geografia, MVP e conquista).
+- `npm run test:ui`: 7 fluxos Playwright, incluindo a conquista militar completa e o celular a 844×390.
+- `npm run build`: sem erros.
+
+### Limitações conhecidas
+
+- As outras casas reagem ao jogador, mas não fazem guerras ou alianças entre si.
+- Rei de Velária e unificação aparecem na escada de ambição, mas ainda não são jogáveis.
+- A geração do mundo leva de 1,5 a 2 s ao criar a campanha; o relevo é pintado em segundo plano.
+- As 60 figuras de lordes são provisórias e vão para os lordes mais próximos do jogador; os demais aparecem pelo brasão.
+- Salvamentos do mapa anterior recomeçam a campanha no mapa novo, preservando casa, recursos, data e crônica.
+
+
+## MVP jogável — Descobrir · Influenciar · Conquistar: concluído em 05/10/2026 (interface substituída pela reestruturação acima)
 
 Escopo detalhado e valores em `docs/MVP_SCOPE.md`. A visão final continua em `docs/GDD.md`.
 

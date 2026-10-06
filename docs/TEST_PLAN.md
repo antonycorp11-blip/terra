@@ -1,31 +1,30 @@
 # Plano de testes
 
-A bateria atual valida os invariantes territoriais da Fase 1 e o ciclo jogável do MVP (`docs/MVP_SCOPE.md`). Os testes dos sistemas ainda não implementados das fases 2–10 permanecem pendentes.
+A bateria valida a geografia realista, o ciclo jogável do MVP (`docs/MVP_SCOPE.md`) e os três caminhos de conquista.
 
 ## Cobertura atual
 
-`src/engine/world.test.ts` (Vitest) cobre a geografia: 7 reinos, 42 feudos, 252 províncias, 1.008 assentamentos, 133 casas, cobertura sem lacunas, vizinhança recíproca e conectada, ilhas, rotas marítimas, rios descendentes, determinismo, calendário, migração geográfica e a audiência de Pontevela.
+`src/engine/world.test.ts` (Vitest): 7 reinos, 42 feudos, 252 províncias, 1.008 assentamentos, 133 casas; toda célula de terra pertence a uma província; assentamentos dentro da província; vizinhança recíproca e conectada; reinos e feudos contíguos; rios seguindo a drenagem; ilhas sem vizinhos terrestres; rotas marítimas sobre água; tamanhos variados (maior/menor > 15) e províncias alongadas; determinismo; calendário; migração da geografia 3; audiência de Pontevela.
 
-`src/engine/mvp.test.ts` (Vitest) cobre:
+`src/engine/mvp.test.ts` (Vitest): criação da casa; conhecimento inicial (feudo conhecido, fronteiras avistadas); expedições; economia (+80/+90/+45/+15); obras; diplomacia; espionagem; conversas; persistência e determinismo; campanha de 180 dias com ida e volta pelo salvamento.
 
-- **Criação da casa**: nome, brasão, cores, persistência, IDs estáveis, validações e bloqueio após o dia 0.
-- **Exploração**: névoa inicial, alcance, custos, duração, limite de duas expedições, revelação, achados reais e persistência.
-- **Economia**: saldo mensal de +80/+90/+45/+15, desconto dos investimentos, conclusão, benefícios permanentes e falta de recursos.
-- **Diplomacia**: pré-requisito de exploração, primeiro contato com as razões da relação, personalidades distintas entre vizinhos, presente com intervalo, aproximação, comércio e recusa quando hostil.
-- **Espionagem**: custo, limite de três, manutenção, alcance, resultados de sucesso e de falha, e relatórios com fonte, confiança e validade.
-- **Personagens**: contato obrigatório, efeitos na relação, memória, intervalo de repetição e respostas conforme o temperamento.
-- **Persistência e determinismo**: expedições, obras e missões em andamento recuperadas com o mesmo resultado futuro; N dias de uma vez iguais a N avanços de um dia; migração da versão 1.
-- **Campanha de 180 dias**: recursos finitos e não negativos, 6 balanços, obras concluídas, ações sem atraso, relações dentro dos limites e ida e volta pelo salvamento.
+`src/engine/conquest.test.ts` (Vitest):
 
-`tests/e2e/map.spec.ts` (Playwright) cobre:
+- **Militar**: recrutamento com custo e limite de população; marcha, cerco, decisão de assalto, cerco prolongado, vitória com três fases, rendição e vassalagem (suserania, cor do reino, ameaça, tributo), ida e volta pelo salvamento; ataque sem justificativa custa renome e ameaça; tropas só se deslocam no próprio território.
+- **Diplomacia**: comércio recusado sem ofertas com contraproposta e devolução; comércio, aliança e vassalagem por tratado com proteção a quem se sente ameaçado.
+- **Influência**: banquete com intervalo, compra de dívida como laço, patrocínio, cerimônia de juramento.
+- **Reações**: convocação, advertência, ultimato, guerra e defesa decidida pela muralha; oferta da coroa e proteção contra a guerra; ascensão a grão-lorde com quatro casas e o reconhecimento.
+- **Viagem e comércio**: viagem pessoal revela e estabelece contato; Ardesh recusa vender pedra; compra de prata; inverno sem sal estraga grãos.
 
-- Criação da casa em três etapas, com validação e prévia do brasão.
-- Mapa com 252 províncias, névoa, bordas de reino e de feudo, destaque da sede e das fronteiras exploráveis, ícones de todos os tipos de assentamento, zoom pela roda, arraste e câmera estável enquanto o tempo corre.
-- Ciclo completo do MVP (investir, explorar, revelar, enviar emissário, dar presente, conversar, contratar espião, receber relatório, salvar, recarregar e carregar).
-- Cena da audiência no castelo e guarnição de Pontevela.
-- Modo Conquistar sem ações militares.
-- Celular em paisagem (844×390) com painel compacto recolhível e sem rolagem horizontal.
-- Arte do atlas e barcos animados respeitando o movimento reduzido.
+`tests/e2e/map.spec.ts` (Playwright):
+
+- Criação da casa em três etapas.
+- Lordes de corpo inteiro no mapa; carta da casa com figura; as quatro visões mudam o mapa e a carta; filtro de recurso; zoom sem recentralizar.
+- Conquista militar completa na interface: marcha, convocação respondida, cerco, tática, batalha animada, rendição, vassala na carta e no contador de casas.
+- Conversa com o duário mostrando a segunda consciência e o intervalo de repetição.
+- Convocação pausando o tempo.
+- Salvar e carregar.
+- Celular em paisagem (844×390) sem rolagem horizontal e com HUD sem sobreposição.
 
 # 29. TESTES OBRIGATÓRIOS
 
