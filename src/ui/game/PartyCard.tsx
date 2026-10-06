@@ -2,6 +2,7 @@ import type { GameState } from '../../engine/types'
 import { BALANCE } from '../../engine/balance'
 import { attackParty, hostile, partyCap, partyReach, playerParty, transferMen } from '../../engine/party'
 import { controlled } from '../../engine/stateUtils'
+import { liftSiege } from '../../engine/military'
 import { rulerOf } from '../../engine/characters'
 import Crest from '../Heraldry'
 import Icon from '../Icons'
@@ -29,6 +30,10 @@ export default function PartyCard({ game, act, onClose }: { game: GameState; act
       </div></div>
       <p className={styles.small}>{party.moves > 0 ? `${party.moves} movimento${party.moves > 1 ? 's' : ''} neste turno. ${reach ? 'Toque num marcador dourado para levar a comitiva.' : 'Nenhuma terra conhecida ao alcance.'}` : 'A comitiva já andou neste turno. Encerre o turno para seguir viagem.'} Cada província sua permite liderar mais 30 homens.</p>
 
+      {party.siegeArmyId && (() => { const a = game.campaign.armies.find(x => x.id === party.siegeArmyId); return <section className={styles.cardSection}><span className={styles.cardH}>cerco de {p.name}</span>
+        <p className={styles.small}>{a ? `${a.men} homens nas trincheiras. ${a.status === 'pronto' ? 'Prontos para o assalto.' : `Assalto possível em ${Math.max(0, (a.siegeEndDay ?? game.day) - game.day)} dias.`}` : ''} O cerco perde homens por doença a cada dia.</p>
+        <button className={`${styles.act} ${styles.sec}`} onClick={() => act(g => liftSiege(g), 'Cerco levantado')}><span>Levantar o cerco</span><small>os homens voltam à comitiva</small></button>
+      </section> })()}
       {(here.length > 0 || seatLord) && <section className={styles.cardSection}><span className={styles.cardH}>aqui em {p.name}</span>
         {seatLord && <div className={styles.meet}><Crest heraldry={heraldryOf(game, seatLord)} size={26}/><span><b>{rulerOf(game, seatLord.id).name}</b> está no castelo da {seatLord.name}</span><button className={styles.mini2} onClick={() => ui.openSheet({ kind: 'conversation', characterId: rulerOf(game, seatLord.id).id })}>Conversar</button></div>}
         {here.map(x => x.kind === 'bandidos'

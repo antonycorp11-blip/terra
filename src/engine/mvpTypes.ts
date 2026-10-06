@@ -32,6 +32,8 @@ export interface Army {
   id: Id; houseId: Id; men: number; route: Id[]; step: number; nextStepDay: number
   order: 'mover' | 'atacar' | 'socorrer'; targetProvinceId: Id; status: 'marchando' | 'sitiando' | 'pronto' | 'dissolvido'
   siegeEndDay?: number; startDay: number; starved?: boolean
+  /** Irian's own retinue laying the siege: survivors rejoin it instead of marching home. */
+  party?: boolean
 }
 export interface BattlePhase { label: string; attacker: number; defender: number }
 export type FieldTactic = 'investida' | 'linha' | 'emboscada'
@@ -56,7 +58,7 @@ export type DecisionKind = 'assalto' | 'submissão' | 'ultimato' | 'rei' | 'conv
  * A band on the map: the player's own retinue, a lord travelling with his escort, or outlaws.
  * Parties move from province to province once per turn; the player's moves are spent during the turn.
  */
-export interface Party { id: Id; kind: 'lorde' | 'bandidos'; houseId: Id | null; leaderId: Id | null; name: string; men: number; provinceId: Id; homeId: Id; goal: Id | null; moves: number; wounded: number }
+export interface Party { id: Id; kind: 'lorde' | 'bandidos'; houseId: Id | null; leaderId: Id | null; name: string; men: number; provinceId: Id; homeId: Id; goal: Id | null; moves: number; wounded: number; siegeArmyId?: Id }
 export interface Prisoner { characterId: Id; houseId: Id; since: number; askedTurn: number }
 /** A house asks for help against outlaws raiding its lands; the reward is paid when the band falls. */
 export interface Quest { id: Id; houseId: Id; partyId: Id; gold: number; influence: number; relation: number; turn: number; done: boolean }

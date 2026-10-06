@@ -15,6 +15,7 @@ import Icon, { ResourceIcon, type IconName } from '../Icons'
 import { useUI, type Lens } from '../store'
 import { fmt, signed, type Act } from '../parts'
 import { goals, houseOf } from '../view'
+import { sfx } from '../sfx'
 import ProvinceCard from './ProvinceCard'
 import PartyCard from './PartyCard'
 import LensSummary from './LensSummary'
@@ -36,6 +37,7 @@ function useDeltas(values: Record<string, number>) {
     for (const [k, v] of Object.entries(values)) if (prev.current[k] !== undefined && v !== prev.current[k]) next[k] = { n: v - prev.current[k], id: Date.now() + Math.random() }
     prev.current = values
     if (!Object.keys(next).length) return
+    if ((next.gold?.n ?? 0) > 0) sfx.coins()
     setShown(s => ({ ...s, ...next }))
     const t = window.setTimeout(() => setShown(s => { const c = { ...s }; for (const k of Object.keys(next)) if (c[k]?.id === next[k].id) delete c[k]; return c }), 2700)
     return () => window.clearTimeout(t)
@@ -64,11 +66,12 @@ export default function GameScreen({ game, setGame, act, notice, setNotice, io }
   const selected = ui.selectedProvinceId
   const finish = () => {
     const from = game.campaign.notifications.length, turn = game.campaign.turn
-    ui.select(null); ui.setPartyMode(false)
+    ui.select(null); ui.setPartyMode(false); sfx.horn()
     act(g => endTurn(g))
     ui.setReport({ turn, from })
   }
-  const move = (id: Id) => act(g => { const next = moveParty(g, id); if (playerParty(next).moves === 0) ui.setPartyMode(false); return next })
+  // With moves left the markers stay; otherwise the card of where Irian stopped opens.
+  const move = (id: Id) => act(g => { sfx.step(); const next = moveParty(g, id); if (playerParty(next).moves === 0) { ui.setPartyMode(false); ui.select(id) } return next })
   const report = ui.report ? game.campaign.notifications.slice(ui.report.from) : []
 
   return <div className={styles.screen} data-lens={ui.lens}>

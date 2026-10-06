@@ -9,6 +9,7 @@ import Crest from '../Heraldry'
 import Icon, { ResourceIcon, type IconName } from '../Icons'
 import { type Act } from '../parts'
 import { cardUrl, heraldryOf, houseOf, mapColor, provinceOf } from '../view'
+import { sfx } from '../sfx'
 import styles from './Game.module.css'
 
 /** One soldier: shield in the house colour, helmet, spear. Fallen soldiers topple and fade. */
@@ -52,6 +53,7 @@ export function BattleScene({ game, battleId, onClose }: { game: GameState; batt
   const defName = outlaw ? b.bandit!.name : def.name, defColor = outlaw ? '#5a1d16' : mapColor(game, def.id), attColor = mapColor(game, att.id)
   const shown = b.phases[Math.min(phase, 2)]
   const playerWon = (b.attackerHouseId === game.playerHouseId) === b.victory
+  useEffect(() => { if (phase === 0) sfx.drums(); else if (phase === 1) sfx.clash(); else if (phase === 3 && playerWon) sfx.fanfare() }, [phase]) // eslint-disable-line react-hooks/exhaustive-deps
   const unit = Math.max(5, Math.ceil(Math.max(b.attackerStart, b.defenderStart) / 42))
   const nA = Math.max(1, Math.ceil(b.attackerStart / unit)), nD = Math.max(1, Math.ceil(b.defenderStart / unit))
   const lossA = nA - Math.ceil(shown.attacker / unit), lossD = nD - Math.ceil(Math.max(0, shown.defender) / unit)

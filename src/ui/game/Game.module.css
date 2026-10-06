@@ -209,7 +209,7 @@
 .odds i{display:block;height:100%;background:linear-gradient(90deg,#b9902f,#f1c75b)}
 
 /* opening */
-.intro{width:min(820px,100%);flex-direction:row;align-items:stretch;background:radial-gradient(ellipse at 20% 60%,rgba(212,171,82,.22),transparent 60%),#121819}
+.sheet.intro{width:min(820px,100%);flex-direction:row;align-items:stretch;background:radial-gradient(ellipse at 20% 60%,rgba(212,171,82,.22),transparent 60%),#121819}
 .introFigure{width:34%;max-width:260px;object-fit:cover;object-position:50% 10%;filter:drop-shadow(0 8px 14px rgba(0,0,0,.6));animation:rise .6s ease-out}
 .introText{flex:1;display:flex;flex-direction:column;gap:7px;padding:16px 18px;overflow:auto}
 .introText h3{margin:0;font:400 28px/1 var(--display);color:#fbe9bd}

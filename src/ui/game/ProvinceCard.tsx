@@ -9,13 +9,13 @@ import { sellers, purchaseQuote, buyResource } from '../../engine/travel'
 import { RACE_LABEL, rulerOf } from '../../engine/characters'
 import { sendEmissary, diplomaticAction } from '../../engine/diplomacy'
 import { negotiationBlocked, startNegotiation, NEGOTIATION_LABEL } from '../../engine/negotiation'
-import { attack, attackQuote, defenders, levyCap, moveTroops, recruit, upgradeWalls, wallLevel } from '../../engine/military'
+import { attack, attackQuote, besiegeWithParty, defenders, levyCap, moveTroops, recruit, upgradeWalls, wallLevel } from '../../engine/military'
 import { influenceAction, influenceOf, cooldownLeft, debtOf, oathReady, proposeOath, canInfluence, relationWith, bondWith } from '../../engine/influence'
 import { hireSpy, sendSpy, spyQuote } from '../../engine/espionage'
 import { attackParty, hostile, lordLocation, moveParty, moveToward, partyPath, orderCost, partyReach, playerParty, presentWith, withOrder } from '../../engine/party'
 import { conquestPlan, PATH_LABEL } from '../../engine/plans'
 import { disposition } from '../../engine/relationships'
-import { controlled, inPlayerRealm, isVassal } from '../../engine/stateUtils'
+import { controlled, inPlayerRealm, isVassal, liegeOf } from '../../engine/stateUtils'
 import { knowledge } from '../../engine/knowledge'
 import type { InvestmentKind, Negotiation, TaxLevel } from '../../engine/mvpTypes'
 import Crest from '../Heraldry'
@@ -86,9 +86,10 @@ function Road({ game, p, act }: { game: GameState; p: Province; act: Act }) {
   const quest = (id: string) => game.campaign.quests.find(q => !q.done && q.partyId === id)
   if (!here && cost === undefined && !route && !others.length) return null
   return <div className={styles.road}>
-    {here ? <span className={styles.hereTag}><Icon name="militar" size={13}/>Irian está aqui com {party.men} homens</span>
+    {here ? <span className={styles.hereTag}><Icon name="militar" size={13}/>{party.siegeArmyId ? `Irian cerca ${p.name}` : `Irian está aqui com ${party.men} homens`}</span>
       : cost !== undefined ? <Action label="Levar a comitiva para cá" detail={`${cost} movimento${cost > 1 ? 's' : ''} · ${party.men} homens`} onClick={() => act(g => moveParty(g, p.id))}/>
       : route ? <Action label="Seguir para cá" detail={`chega em ${Math.ceil(route.cost / BALANCE.party.moves)} turnos${party.moves ? '' : ' · a comitiva já andou neste turno'}`} disabled={!party.moves && 'encerre o turno para seguir'} onClick={() => act(g => moveToward(g, p.id))}/> : null}
+    {here && !party.siegeArmyId && !inPlayerRealm(game, p.id) && knowledge(game, p.id) >= 2 && (attackQuote(game, p.id, p.id).justified || hostile(game, p.governingHouseId)) && !game.campaign.armies.some(a => a.houseId === game.playerHouseId && a.targetProvinceId === p.id) && <Action tone="war" label={`Cercar ${p.name}`} detail={`com os ${party.men} homens da comitiva · ~${Math.round(defenders(game, p) / 10) * 10} defensores`} disabled={party.men < BALANCE.military.partySiegeMin && `precisa de ${BALANCE.military.partySiegeMin} homens`} onClick={() => act(g => besiegeWithParty(g), 'Cerco iniciado')}/>}
     {others.map(x => { const q = quest(x.id), foe = x.kind === 'bandidos'
       return <div key={x.id} className={`${styles.meet} ${foe ? styles.outlaw : ''}`}>
         {foe ? <Icon name="militar" size={20}/> : <Crest heraldry={heraldryOf(game, houseOf(game, x.houseId!))} size={24}/>}
@@ -265,12 +266,13 @@ function ForeignMilitary({ game, p, act }: { game: GameState; p: Province; act: 
   const men = game.campaign.garrisons[seat] ?? 0
   const [count, setCount] = useState(Math.max(50, Math.min(men, 400)))
   if (inPlayerRealm(game, p.id)) return <p className={styles.small}>Território seu. Defensores: {defenders(game, p)}.</p>
-  const q = attackQuote(game, seat, p.id)
+  const q = attackQuote(game, seat, p.id), party = playerParty(game), here = party.provinceId === p.id && !party.siegeArmyId
   const war = game.campaign.armies.find(a => a.houseId === game.playerHouseId && a.targetProvinceId === p.id && a.order === 'atacar')
   return <>
     <div className={styles.stats}><span><b>~{Math.round(q.defenders / 10) * 10}</b>defensores</span><span><b>{q.wall}</b>muralha</span><span><b>{q.days}d</b>marcha</span><span><b>{q.siegeDays}d</b>cerco</span></div>
     <p className={q.justified ? styles.small : styles.alert}>{q.justified ? 'Você tem justificativa para esta guerra.' : `Sem justificativa: −${BALANCE.military.unjustRenown} de renome, e as casas vão desconfiar. Um espião pode fabricar uma reivindicação.`}</p>
-    {war ? <p className={styles.small}>Seu exército de {war.men} homens {war.status === 'marchando' ? 'está a caminho' : war.status === 'sitiando' ? 'cerca as muralhas' : 'aguarda a ordem de assalto'}.</p> : <>
+    {here && !war && <div className={styles.acts}><Action tone="war" label={`Cercar ${p.name} com a comitiva`} detail={`${party.men} homens · assalto em ${q.siegeDays} dias${party.men < q.recommended ? ` · recomendado ${q.recommended}` : ''}${p.governingHouseId === liegeOf(game) ? ' · é guerra contra o seu suserano' : !q.justified ? ` · sem justificativa: −${BALANCE.military.unjustRenown} renome` : ''}`} disabled={party.men < BALANCE.military.partySiegeMin && `precisa de ${BALANCE.military.partySiegeMin} homens`} onClick={() => act(g => besiegeWithParty(g), 'Cerco iniciado')}/></div>}
+    {war ? <p className={styles.small}>{war.party ? 'Irian e a comitiva' : 'Seu exército'} de {war.men} homens {war.status === 'marchando' ? 'está a caminho' : war.status === 'sitiando' ? `cerca as muralhas${war.siegeEndDay ? ` (assalto em ${Math.max(0, war.siegeEndDay - game.day)} dias)` : ''}` : 'aguarda a ordem de assalto'}.</p> : <>
       <div className={styles.moveRow}><span>Homens</span><input type="range" min={50} max={Math.max(50, men)} step={25} value={count} onChange={e => setCount(+e.target.value)} aria-label="Homens para a campanha"/><b>{count}</b></div>
       <p className={styles.small}>Recomendado: {q.recommended}. Você tem {men} em Pontevela.</p>
       <div className={styles.acts}>

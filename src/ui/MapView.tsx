@@ -389,12 +389,14 @@ export default function MapView({ game, lens, selectedId, resourceFilter, focus,
             </Walker>
           })
       })()}
-      {game.campaign.parties.filter(b => b.kind === 'bandidos' && knowledge(game, b.provinceId) >= 1).map(b => { const pos = S(provinceOf(game, b.provinceId).center); if (!onScreen(pos)) return null
+      {game.campaign.parties.filter(b => b.kind === 'bandidos' && knowledge(game, b.provinceId) >= 1).map(b => { const c = S(provinceOf(game, b.provinceId).center), pos: [number, number] = [c[0], c[1] - 30]; if (!onScreen(pos)) return null
         const quest = game.campaign.quests.find(q => !q.done && q.partyId === b.id)
         return <Walker key={b.id} id={b.id} at={b.provinceId} x={pos[0]} y={pos[1]} className={styles.band} onClick={() => onBand(b.id, b.provinceId)} label={`${b.name}, ${b.men} salteadores`}>
           <Icon name="militar" size={14}/><b>{b.men}</b>{quest && <i title="recompensa">★</i>}
         </Walker> })}
-      {reach && [...reach].map(([id, cost]) => { const pos = S(castleAt(provinceOf(game, id))); if (!onScreen(pos)) return null
+      {reach && [...reach].map(([id, cost]) => { const c = S(provinceOf(game, id).center), k = S(castleAt(provinceOf(game, id)))
+        // At the province's heart, kept clear of the lord standing on the castle.
+        const pos: [number, number] = Math.hypot(c[0] - k[0], c[1] - k[1]) < 44 ? [k[0], k[1] + 30] : c; if (!onScreen(pos)) return null
         return <button key={`reach-${id}`} type="button" data-ui className={styles.reach} style={{ left: pos[0], top: pos[1] }} onClick={() => onMove(id)} aria-label={`Levar a comitiva para ${knowledge(game, id) >= 2 ? provinceOf(game, id).name : 'terra avistada'}`}>
           <span>{cost}</span>
         </button> })}

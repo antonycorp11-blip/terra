@@ -115,6 +115,49 @@ export function attack(game: GameState, from: Id, target: Id, men: number): Game
   return g
 }
 
+/** Survivors of a campaign march home; those of Irian's own siege rejoin his retinue. */
+function sendHome(g: GameState, a: Army, men: number) {
+  if (a.party) {
+    const party = g.campaign.parties.find(x => x.id === 'party-player')
+    if (party) { party.men += men; delete party.siegeArmyId; return }
+  }
+  const home = controlled(g)[0], route = armyRoute(g, a.targetProvinceId, home.id, false)
+  if (route.length > 1 && men > 0) newArmy(g, g.playerHouseId, men, route, 'mover'); else g.campaign.garrisons[home.id] = (g.campaign.garrisons[home.id] ?? 0) + men
+}
+/** Irian lays siege with his own retinue where it stands, as a lord does in the field. */
+export function besiegeWithParty(game: GameState): GameState {
+  const party = game.campaign.parties.find(x => x.id === 'party-player')!, target = party.provinceId, p = byId(game, target)
+  requireRule(!party.siegeArmyId, 'Irian já está num cerco.')
+  requireRule(!inPlayerRealm(game, target), 'Essa terra já é sua.')
+  requireRule(party.men >= M.partySiegeMin, `São precisos ${M.partySiegeMin} homens na comitiva para cercar um castelo.`)
+  requireRule(!game.campaign.armies.some(a => a.houseId === game.playerHouseId && a.targetProvinceId === target && a.order === 'atacar'), 'Já há um exército seu contra essa província.')
+  const g = editGame(game), me = g.campaign.parties.find(x => x.id === 'party-player')!, house = g.world.houses.find(h => h.id === (p.occupyingHouseId ?? p.governingHouseId))!
+  const q = attackQuote(g, target, target)
+  if (!q.justified) {
+    pay(g, { renown: Math.min(playerHouse(g).prestige, M.unjustRenown) })
+    g.campaign.politics.liegeThreat = clamp(g.campaign.politics.liegeThreat + M.unjustThreat, 0, 100)
+    for (const c of g.campaign.contacts) c.relation = clamp(c.relation - (c.houseId === house.id ? 30 : 5))
+  }
+  const liege = g.world.provinces.find(x => x.id === playerHouse(g).seatProvinceId)!.liegeHouseId
+  if (house.id === liege) g.campaign.politics.liegeThreat = 100
+  const army: Army = { id: nextId(g, 'army'), houseId: g.playerHouseId, men: me.men, route: [target], step: 0, nextStepDay: g.day, order: 'atacar', targetProvinceId: target, status: 'sitiando', siegeEndDay: g.day + q.siegeDays, startDay: g.day, party: true }
+  g.campaign.armies.push(army)
+  me.siegeArmyId = army.id; me.men = 0; me.moves = 0
+  sendRelief(g, p)
+  notify(g, 'Cerco iniciado', `Irian cerca ${p.name} com ${army.men} homens. O assalto será possível em ${q.siegeDays} dias.${q.justified ? '' : ' Sem justificativa: seu renome caiu e as casas desconfiam de você.'}`, target, true)
+  return g
+}
+/** Irian gives up the siege and his men rejoin the retinue. */
+export function liftSiege(game: GameState): GameState {
+  const party = game.campaign.parties.find(x => x.id === 'party-player')!
+  requireRule(party.siegeArmyId, 'Irian não está cercando nada.')
+  const g = editGame(game), a = g.campaign.armies.find(x => x.id === party.siegeArmyId)
+  for (const d of g.campaign.decisions) if (d.armyId === a?.id && !d.resolved) d.resolved = true
+  if (a) { a.status = 'dissolvido'; sendHome(g, a, a.men) } else delete g.campaign.parties.find(x => x.id === 'party-player')!.siegeArmyId
+  g.campaign.armies = g.campaign.armies.filter(x => x.status !== 'dissolvido')
+  notify(g, 'Cerco levantado', 'Irian recolheu os homens e deixou as muralhas em paz.', party.provinceId)
+  return g
+}
 /** Deterministic battle: numbers, walls and tactic decide; a hashed roll adds ±12%. */
 export function resolveBattle(seedKey: string, attacker: number, defender: number, wall: number, tactic: Tactic, starved: boolean, terrain: Province['terrain']) {
   const t = M.tactics[tactic] as { power: number; attackerLoss: number; label: string }
@@ -159,14 +202,15 @@ export function assault(game: GameState, armyId: Id, tactic: Tactic): GameState 
     if (house.seatProvinceId === p.id && house.rank !== 'real') {
       a.status = 'dissolvido'
       g.campaign.decisions.push({ id: nextId(g, 'decision'), kind: 'submissão', day: g.day, provinceId: p.id, houseId: house.id, resolved: false })
-      // A third of the victors hold the new land; the rest march home.
-      const stay = Math.round(r.attackerLeft * .35), home = controlled(g)[0]
+      // A third of the victors hold the new land; the rest march home (or ride on with Irian).
+      const stay = Math.round(r.attackerLeft * .35)
       g.campaign.garrisons[p.id] = (g.campaign.garrisons[p.id] ?? 0) + stay
-      const route = armyRoute(g, p.id, home.id, false)
-      if (route.length > 1) newArmy(g, g.playerHouseId, r.attackerLeft - stay, route, 'mover'); else g.campaign.garrisons[home.id] = (g.campaign.garrisons[home.id] ?? 0) + r.attackerLeft - stay
+      sendHome(g, a, r.attackerLeft - stay)
     } else {
       p.occupyingHouseId = g.playerHouseId
-      g.campaign.garrisons[p.id] = r.attackerLeft; a.status = 'dissolvido'
+      const stay = a.party ? Math.round(r.attackerLeft * .35) : r.attackerLeft
+      g.campaign.garrisons[p.id] = stay; a.status = 'dissolvido'
+      if (a.party) sendHome(g, a, r.attackerLeft - stay)
       g.campaign.politics.liegeThreat = clamp(g.campaign.politics.liegeThreat + BALANCE.politics.threatOccupation, 0, 100)
       record(g, `A ${playerHouse(g).name} ocupou ${p.name}. A posse legal continua com a ${house.name}.`, [p.id, house.id])
     }
@@ -174,8 +218,7 @@ export function assault(game: GameState, armyId: Id, tactic: Tactic): GameState 
     battle.summary = `Derrota em ${p.name}. ${battle.attackerStart - r.attackerLeft} homens perdidos; os sobreviventes recuam.`
     playerHouse(g).prestige = Math.max(0, playerHouse(g).prestige - M.defeatRenown)
     a.status = 'dissolvido'
-    const home = controlled(g)[0], route = armyRoute(g, p.id, home.id, false)
-    if (route.length > 1 && r.attackerLeft > 0) newArmy(g, g.playerHouseId, r.attackerLeft, route, 'mover'); else g.campaign.garrisons[home.id] = (g.campaign.garrisons[home.id] ?? 0) + r.attackerLeft
+    sendHome(g, a, r.attackerLeft)
   }
   g.campaign.battles.push(battle)
   syncMobilizable(g)
@@ -274,8 +317,7 @@ function relieve(g: GameState, relief: Army) {
   for (const d of g.campaign.decisions) if (d.armyId === besieger.id && !d.resolved) d.resolved = true
   if (r.victory) {
     const left = Math.round(besieger.men * .3); besieger.status = 'dissolvido'
-    const home = controlled(g)[0], route = armyRoute(g, p.id, home.id, false)
-    if (route.length > 1 && left > 0) newArmy(g, g.playerHouseId, left, route, 'mover'); else g.campaign.garrisons[home.id] = (g.campaign.garrisons[home.id] ?? 0) + left
+    sendHome(g, besieger, left)
     playerHouse(g).prestige = Math.max(0, playerHouse(g).prestige - M.defeatRenown)
     castleOf(g, p).garrison += Math.round(r.attackerLeft * .5)
   } else {

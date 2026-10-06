@@ -14,6 +14,7 @@ export function endTurn(game: GameState): GameState {
   processParties(g)
   g.campaign.turn++
   g.campaign.orders = BALANCE.turn.orders
-  playerParty(g).moves = BALANCE.party.moves
+  const party = playerParty(g)
+  party.moves = party.siegeArmyId ? 0 : BALANCE.party.moves
   return g
 }

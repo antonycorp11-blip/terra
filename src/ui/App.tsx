@@ -73,7 +73,7 @@ export default function App() {
         <div className={styles.titleCard}>
           <span className={styles.eyebrow}>TERRA</span>
           <h1>Herdeiros do Juramento</h1>
-          <p>Um mundo gigante. Três formas de conquistar. Uma interface simples.</p>
+          <p>Monte a comitiva, cace bandidos, capture lordes. De senhor de uma ponte a rei de Velária.</p>
           {hasAutosave && <button className={styles.primary} onClick={() => doLoad('autosave')}>Continuar campanha</button>}
           <button className={hasAutosave ? styles.secondary : styles.primary} onClick={startCreation} disabled={preparing}>{preparing ? 'Desenhando Varedor…' : 'Nova Campanha'}</button>
           <button className={styles.secondary} onClick={async () => setSaves(await listSaves().catch(() => []))}>Carregar campanha</button>

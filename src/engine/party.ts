@@ -16,7 +16,8 @@ const prov = (g: GameState, id: Id) => g.world.provinces.find(p => p.id === id)!
 const house = (g: GameState, id: Id) => g.world.houses.find(h => h.id === id)!
 const roll = (g: GameState, key: string) => hash(`${g.world.seed}:${g.campaign.turn}:${key}`)
 export const playerParty = (g: GameState) => g.campaign.parties.find(p => p.id === PLAYER_PARTY)!
-export const partyCap = (g: GameState) => PT.capBase + PT.capPerProvince * controlled(g).length
+/** Irian leads more men as his land and sworn houses grow. */
+export const partyCap = (g: GameState) => PT.capBase + PT.capPerProvince * controlled(g).length + PT.capPerVassal * g.campaign.vassals.length
 /** Moving through mountains costs two moves. */
 const hopCost = (p: Province) => p.terrain === 'montanha' ? 2 : 1
 /** The ruler's party, if that lord is out on the roads; otherwise he is at his seat. */
@@ -43,6 +44,7 @@ export function withOrder(game: GameState, action: (g: GameState) => GameState, 
 /** Provinces Irian can reach this turn, with the moves each costs. Sighted land can be entered and is explored on arrival. */
 export function partyReach(g: GameState): Map<Id, number> {
   const party = playerParty(g), reach = new Map<Id, number>([[party.provinceId, 0]])
+  if (party.siegeArmyId) return new Map()
   const queue = [party.provinceId]
   while (queue.length) {
     const id = queue.shift()!, cost = reach.get(id)!
@@ -83,6 +85,7 @@ export function moveToward(game: GameState, to: Id): GameState {
 }
 export function moveParty(game: GameState, to: Id): GameState {
   const cost = partyReach(game).get(to)
+  requireRule(!game.campaign.parties.find(p => p.id === PLAYER_PARTY)!.siegeArmyId, 'Irian está num cerco. Levante o cerco para partir.')
   requireRule(cost !== undefined, 'A comitiva não chega lá neste turno.')
   requireRule(!game.campaign.decisions.some(d => !d.resolved), 'Resolva a decisão pendente antes de partir.')
   const g = editGame(game), party = playerParty(g), p = prov(g, to)
@@ -380,7 +383,8 @@ function moveLords(g: GameState) {
     // Home again and nothing to do: the lord stays in his hall (and leaves the map).
     if (lord.provinceId === lord.homeId && lord.goal === lord.homeId && !lord.wounded && roll(g, `rest:${hid}`) % 2 === 0) g.campaign.parties = g.campaign.parties.filter(x => x.id !== lord.id)
   }
-  g.campaign.parties = g.campaign.parties.filter(p => p.men > 0)
+  // Irian's party stays even when all his men are in the siege lines.
+  g.campaign.parties = g.campaign.parties.filter(p => p.men > 0 || p.id === PLAYER_PARTY)
 }
 /** Captive lords weigh on their houses and on your name. */
 function keepPrisoners(g: GameState) {
@@ -394,6 +398,6 @@ export function processParties(g: GameState) {
   moveLords(g); moveBands(g); spawnBands(g); raid(g); keepPrisoners(g)
   const me = playerParty(g)
   // A hostile lord or a band that ends the turn on Irian's province attacks first.
-  const foe = g.campaign.parties.find(x => x.id !== PLAYER_PARTY && x.provinceId === me.provinceId && (x.kind === 'bandidos' ? x.men > me.men : hostile(g, x.houseId!) && x.men > me.men * .8))
+  const foe = !me.siegeArmyId && g.campaign.parties.find(x => x.id !== PLAYER_PARTY && x.provinceId === me.provinceId && (x.kind === 'bandidos' ? x.men > me.men : hostile(g, x.houseId!) && x.men > me.men * .8))
   if (foe) { encounter(g, foe, true); notify(g, 'Emboscada', `${foe.kind === 'bandidos' ? foe.name : `A escolta da ${house(g, foe.houseId!).name}`} cercou a comitiva de Irian em ${prov(g, me.provinceId).name}.`, me.provinceId, true) }
 }

@@ -10,6 +10,7 @@ import Crest from '../Heraldry'
 import Icon from '../Icons'
 import type { Lens } from '../store'
 import { fmt, longDate } from '../parts'
+import { isMuted, setMuted } from '../sfx'
 import { assetUrl, heraldryOf, houseOf, mapColor } from '../view'
 import type { SaveIO } from './GameScreen'
 import styles from './Game.module.css'
@@ -87,9 +88,14 @@ export function MenuSheet({ game, io, onClose, onChronicle }: { game: GameState;
       <div><span className={styles.cardH}>salvar</span><div className={styles.moveRow}><input value={slot} onChange={e => setSlot(e.target.value)} aria-label="Nome do salvamento"/><button className={styles.btn} onClick={async () => { await io.save(slot.trim() || 'Campanha'); setSaves(await io.list()) }}>Salvar</button></div>
         <span className={styles.cardH}>carregar</span>{saves.length ? saves.map(s => <div key={s.slot} className={styles.saveRow}><button onClick={() => io.load(s.slot)}><b>{s.slot === 'autosave' ? 'Salvamento automático' : s.slot}</b><small>{longDate(s.game.day)}</small></button><button onClick={async () => { await io.remove(s.slot); setSaves(await io.list()) }} aria-label={`Excluir ${s.slot}`}>×</button></div>) : <p className={styles.small}>Nenhum salvamento neste navegador.</p>}</div>
       <div><span className={styles.cardH}>campanha</span><button className={styles.btnSec} onClick={onChronicle}>Crônica e notícias</button><button className={styles.btnSec} onClick={io.newCampaign}>Nova campanha</button>
-        <span className={styles.cardH}>como jogar</span><p className={styles.small}>Toque nas províncias para ver a casa que as governa. As quatro visões no canto inferior mudam o mapa inteiro e as ações da carta. Cada província pode ser tomada por três caminhos, todos em etapas. O tempo para sozinho quando algo exige uma decisão.</p></div>
+        <SoundToggle/>
+        <span className={styles.cardH}>como jogar</span><p className={styles.small}>Cada turno é uma semana. Toque em Irian e leve a comitiva pelo mapa (2 movimentos por turno): cace bandos, encontre lordes em pessoa, cerque castelos. Ações à distância gastam uma das 3 ordens do turno. Quando terminar, toque em Encerrar turno: o mundo anda, e as cenas e o relatório mostram o que aconteceu. As quatro visões mudam o mapa e as ações dos cartões.</p></div>
     </div>
   </Sheet>
+}
+function SoundToggle() {
+  const [muted, setM] = useState(isMuted())
+  return <button className={styles.btnSec} onClick={() => { setMuted(!muted); setM(!muted) }}>{muted ? 'Som: desligado' : 'Som: ligado'}</button>
 }
 export function ChronicleSheet({ game, onClose, onPick }: { game: GameState; onClose: () => void; onPick: (id: Id) => void }) {
   return <Sheet title="Crônica" sub="Tudo o que aconteceu, do mais recente ao mais antigo" onClose={onClose} wide>

@@ -4,6 +4,7 @@ import { endTurn } from './turns'
 import { openDecisions, resolveDecision, choicesFor } from './decisions'
 import { attackParty, lordLocation, moveParty, moveToward, partyPath, partyReach, playerParty, processParties, transferMen, withOrder, PLAYER_PARTY } from './party'
 import { converse } from './dialogue'
+import { besiegeWithParty, liftSiege } from './military'
 import { rulerOf } from './characters'
 import { knowledge } from './knowledge'
 import { startInvestment } from './investments'
@@ -148,5 +149,25 @@ describe('bandos, recompensas e batalhas em campo', () => {
     expect(a.campaign.parties).toEqual(b.campaign.parties)
     expect(a.campaign.parties.some(p => p.kind === 'bandidos')).toBe(true)
     expect(a.campaign.parties.find(p => p.id === PLAYER_PARTY)).toBeDefined()
+  })
+  it('Irian cerca um castelo com a comitiva; os sobreviventes voltam para ela', () => {
+    let g = fresh()
+    const ardesh = house(g, 'Casa Ardesh'), seat = ardesh.seatProvinceId
+    const me = playerParty(g); me.provinceId = seat; me.men = 1600
+    g = besiegeWithParty(g)
+    expect(playerParty(g).men).toBe(0); expect(playerParty(g).siegeArmyId).toBeDefined()
+    expect(() => moveParty(g, playerParty(g).provinceId)).toThrow('cerco')
+    expect(liftSiege(g).campaign.parties.find(p => p.id === PLAYER_PARTY)!.men).toBe(1600)
+    for (let i = 0; i < 6 && !openDecisions(g).some(d => d.kind === 'assalto'); i++) {
+      for (const d of openDecisions(g)) g = resolveDecision(g, d.id, choicesFor(g, d).at(-1)!.id)
+      if (!openDecisions(g).some(d => d.kind === 'assalto')) g = endTurn(g)
+    }
+    const assault = openDecisions(g).find(d => d.kind === 'assalto')!
+    g = resolveDecision(g, assault.id, 'assalto')
+    expect(g.campaign.battles.at(-1)!.victory).toBe(true)
+    expect(playerParty(g).men).toBeGreaterThan(300)
+    expect(playerParty(g).siegeArmyId).toBeUndefined()
+    expect(g.campaign.garrisons[seat]).toBeGreaterThan(0)
+    expect(openDecisions(g).some(d => d.kind === 'submissão')).toBe(true)
   })
 })

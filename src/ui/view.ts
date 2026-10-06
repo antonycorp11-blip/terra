@@ -40,7 +40,7 @@ export interface LordToken { houseId: Id; characterId: Id; provinceId: Id; men: 
 export function lordTokens(g: GameState): LordToken[] {
   const tokens: LordToken[] = []
   const me = g.campaign.parties.find(p => p.id === 'party-player')
-  if (me) tokens.push({ houseId: g.playerHouseId, characterId: `ruler-${g.playerHouseId}`, provinceId: me.provinceId, men: me.men, riding: me.provinceId !== houseOf(g, g.playerHouseId).seatProvinceId, me: true })
+  if (me) tokens.push({ houseId: g.playerHouseId, characterId: `ruler-${g.playerHouseId}`, provinceId: me.provinceId, men: me.siegeArmyId ? g.campaign.armies.find(a => a.id === me.siegeArmyId)?.men ?? me.men : me.men, riding: me.provinceId !== houseOf(g, g.playerHouseId).seatProvinceId, me: true })
   for (const h of g.world.houses) {
     if (h.id === g.playerHouseId || isVassal(g, h.id) || g.campaign.prisoners.some(p => p.houseId === h.id)) continue
     const party = g.campaign.parties.find(p => p.kind === 'lorde' && p.houseId === h.id)

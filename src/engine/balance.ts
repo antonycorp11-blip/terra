@@ -24,7 +24,7 @@ export const BALANCE = {
     siegeAttrition: .006,
     upkeepFreeMen: 370, upkeepGoldPer10: 1, marchFoodPer10PerDay: 1,
     hopDays: 3, terrainHop: { 'planície': 0, 'várzea': 1, 'litoral': 0, 'colina': 1, 'floresta': 1, 'montanha': 3 } as Record<string, number>,
-    siegeDaysPerWall: 4, siegeBaseDays: 4, wallBonus: .28,
+    siegeDaysPerWall: 4, siegeBaseDays: 4, wallBonus: .28, partySiegeMin: 40,
     tactics: { assalto: { power: 1, extraDays: 0, attackerLoss: .42, label: 'Assalto direto' }, amanhecer: { power: 1.14, extraDays: 0, attackerLoss: .34, renown: 4, label: 'Ataque ao amanhecer' }, cerco: { power: 1, defenderFactor: .68, extraDays: 8, attackerLoss: .22, foodPer10: 6, label: 'Cercar e esfomear' } },
     unjustRenown: 25, unjustThreat: 15, victoryRenown: 10, defeatRenown: 5,
     wallUpgrade: { stone: 120, gold: 80 },
@@ -45,7 +45,7 @@ export const BALANCE = {
   /** A turn is a week. Orders pay for actions at a distance; what Irian does in person is free. */
   turn: { days: 7, orders: 3 },
   /** Irian's retinue grows with the land he rules. */
-  party: { moves: 2, start: 45, capBase: 60, capPerProvince: 30, transfer: 25, npcShare: .2, npcBase: 25, defeatKeep: .15, defeatRenown: 5 },
+  party: { moves: 2, start: 45, capBase: 60, capPerProvince: 30, capPerVassal: 40, transfer: 25, npcShare: .2, npcBase: 25, defeatKeep: .15, defeatRenown: 5 },
   field: { investida: { power: 1.12, loss: .36, label: 'Carga' }, linha: { power: 1, loss: .24, label: 'Segurar a linha' }, emboscada: { power: 1.3, loss: .2, label: 'Emboscada', renown: 3 }, retreatLoss: .12 },
   bandits: { maxBase: 2, perTurns: 8, maxBands: 6, startMen: 18, growth: 3, cap: 140, raidGold: 20, raidLoyalty: 3, lootPerMan: 2, renown: 3, garrisonGuard: 2, flee: 1.3, rewardGold: 80, rewardInfluence: 10, rewardRelation: 10 },
   prisoner: { ransomBase: 100, ransomShare: .25, freeRelation: 20, freeInfluence: 10, freeRenown: 3, keepRelation: 2, keepThreat: 5, captureChance: 55, captiveDefense: .75 },
