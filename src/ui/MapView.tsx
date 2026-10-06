@@ -6,7 +6,7 @@ import { influenceOf } from '../engine/influence'
 import { controlled, isVassal } from '../engine/stateUtils'
 import { knowledge } from '../engine/knowledge'
 import type { TerrainResult } from './map/terrainWorker'
-import { bordersOf, labelSize } from './map/geometry'
+import { bordersOf, labelSize, smoothRings } from './map/geometry'
 import { resourceImage } from './map/canvasIcons'
 import { assetUrl, heraldryOf, houseOf, lordTokens, mapColor, provinceOf, rulerFigure } from './view'
 import Icon from './Icons'
@@ -73,7 +73,7 @@ function geometry(game: GameState): Geo {
   const paths = new Map<Id, Path2D>(), bbox = new Map<Id, [number, number, number, number]>()
   for (const p of game.world.provinces) {
     const path = new Path2D(); let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
-    for (const ring of p.polygons) { ring.forEach((q, i) => { if (i) path.lineTo(q[0], q[1]); else path.moveTo(q[0], q[1]); x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]) }); path.closePath() }
+    for (const ring of smoothRings(game.world, p)) { ring.forEach((q, i) => { if (i) path.lineTo(q[0], q[1]); else path.moveTo(q[0], q[1]); x0 = Math.min(x0, q[0]); y0 = Math.min(y0, q[1]); x1 = Math.max(x1, q[0]); y1 = Math.max(y1, q[1]) }); path.closePath() }
     paths.set(p.id, path); bbox.set(p.id, [x0, y0, x1, y1])
   }
   g = { paths, bbox, borders: bordersOf(game.world).map(b => ({ a: b.a, b: b.b, path: new Path2D(b.d) })) }
@@ -89,8 +89,11 @@ function provinceAt(game: GameState, geo: Geo, x: number, y: number): Province |
 let fogTile: HTMLCanvasElement | null = null
 function fogPattern(ctx: CanvasRenderingContext2D) {
   if (!fogTile) {
-    fogTile = document.createElement('canvas'); fogTile.width = fogTile.height = 12
-    const x = fogTile.getContext('2d')!; x.fillStyle = '#36414a'; x.fillRect(0, 0, 12, 12); x.strokeStyle = '#4c5963'; x.lineWidth = 2.2; x.beginPath(); x.moveTo(-3, 15); x.lineTo(15, -3); x.moveTo(-3, 3); x.lineTo(3, -3); x.moveTo(9, 15); x.lineTo(15, 9); x.stroke()
+    // Terra incognita: bare parchment with an engraver's hatching, as on an unfinished atlas page.
+    fogTile = document.createElement('canvas'); fogTile.width = fogTile.height = 16
+    const x = fogTile.getContext('2d')!; x.fillStyle = '#cdbb95'; x.fillRect(0, 0, 16, 16)
+    x.strokeStyle = 'rgba(122,96,58,.38)'; x.lineWidth = 1; x.beginPath(); x.moveTo(-4, 20); x.lineTo(20, -4); x.moveTo(-4, 4); x.lineTo(4, -4); x.moveTo(12, 20); x.lineTo(20, 12); x.stroke()
+    x.fillStyle = 'rgba(150,120,75,.18)'; x.fillRect(3, 9, 2, 2); x.fillRect(11, 3, 1, 1)
   }
   return ctx.createPattern(fogTile, 'repeat')!
 }
@@ -196,12 +199,14 @@ export default function MapView({ game, lens, selectedId, resourceFilter, focus,
     for (const p of g.world.provinces) {
       if (!inView(p.id)) continue
       const path = geo.paths.get(p.id)!, lv = level(p.id)
-      if (lv === 0) { pc.fillStyle = fog; pc.globalAlpha = .9; pc.fill(path, 'evenodd'); pc.globalAlpha = 1; continue }
-      if (lv === 1) { pc.fillStyle = 'rgba(30,40,40,.26)'; pc.fill(path, 'evenodd'); continue }
+      if (lv === 0) { pc.fillStyle = fog; pc.globalAlpha = .97; pc.fill(path, 'evenodd'); pc.globalAlpha = 1; continue }
+      if (lv === 1) { pc.fillStyle = 'rgba(205,187,149,.5)'; pc.fill(path, 'evenodd'); continue }
+      // Watercolour: a light wash of the house colour and a deeper band along the border.
       const col = realm(p) ? playerColor : mapColor(g, p.occupyingHouseId ?? p.governingHouseId)
       pc.save(); pc.clip(path, 'evenodd')
-      pc.globalAlpha = realm(p) ? .42 : .28; pc.fillStyle = col; pc.fill(path, 'evenodd')
-      pc.globalAlpha = realm(p) ? .5 : .72; pc.strokeStyle = col; pc.lineWidth = Math.min(9, px(16)); pc.stroke(path)
+      pc.globalAlpha = realm(p) ? .3 : .16; pc.fillStyle = col; pc.fill(path, 'evenodd')
+      pc.globalAlpha = realm(p) ? .42 : .5; pc.strokeStyle = col; pc.lineWidth = Math.min(7, px(11)); pc.stroke(path)
+      pc.globalAlpha = realm(p) ? .5 : .65; pc.lineWidth = Math.min(2.5, px(3.5)); pc.stroke(path)
       if (isVassal(g, p.governingHouseId)) { pc.globalAlpha = .28; pc.strokeStyle = '#fff4d0'; pc.lineWidth = px(1); const b = geo.bbox.get(p.id)!, h = b[3] - b[1], step = px(7); pc.beginPath(); for (let x = b[0] - h; x < b[2]; x += step) { pc.moveTo(x, b[3]); pc.lineTo(x + h, b[1]) } pc.stroke() }
       pc.restore()
     }
@@ -215,7 +220,7 @@ export default function MapView({ game, lens, selectedId, resourceFilter, focus,
       groups[cls].addPath(b.path)
     }
     pc.lineJoin = 'round'; pc.lineCap = 'round'
-    pc.strokeStyle = 'rgba(120,135,142,.35)'; pc.lineWidth = px(.7); pc.stroke(groups.hidden)
+    pc.strokeStyle = 'rgba(122,96,58,.28)'; pc.lineWidth = px(.7); pc.stroke(groups.hidden)
     pc.strokeStyle = 'rgba(34,24,11,.6)'; pc.lineWidth = px(1); pc.stroke(groups.province)
     pc.strokeStyle = 'rgba(255,243,207,.2)'; pc.lineWidth = px(.8); pc.setLineDash([px(2), px(4)]); pc.stroke(groups.merged); pc.setLineDash([])
     pc.strokeStyle = 'rgba(20,13,6,.75)'; pc.lineWidth = px(3.2); pc.stroke(groups.fief); pc.strokeStyle = 'rgba(242,226,182,.8)'; pc.lineWidth = px(1); pc.stroke(groups.fief)

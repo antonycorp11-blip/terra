@@ -50,6 +50,12 @@ export function initializeCampaign(old: LegacyGame): GameState {
     const base = initialRelation(g, h.id, h.seatProvinceId)
     g.campaign.contacts.push({ houseId: h.id, provinceId: h.seatProvinceId, establishedDay: 0, relation: START_RELATION[h.name] ?? base.relation, reasons: START_RELATION[h.name] !== undefined ? ['Vizinhos de feudo há gerações', ...base.reasons.slice(1)] : base.reasons, lastGiftDay: null, audienceUntil: -1, trade: false })
   }
+  // The first week already has a target: a small band on a neighbour's road, and a house asking for help.
+  const road = seat.neighbors.map(id => g.world.provinces.find(p => p.id === id)!).filter(p => p.governingHouseId !== house.id && g.campaign.contacts.some(c => c.houseId === p.governingHouseId)).sort((a, b) => a.id.localeCompare(b.id))[0]
+  if (road) {
+    g.campaign.parties.push({ id: 'band-0', kind: 'bandidos', houseId: null, leaderId: null, name: 'Os Corvos do Vau', men: 16, provinceId: road.id, homeId: road.id, goal: null, moves: 1, wounded: 0 })
+    g.campaign.quests.push({ id: 'quest-0', houseId: road.governingHouseId, partyId: 'band-0', gold: 80, influence: 10, relation: 10, turn: 1, done: false })
+  }
   // Stable membership ids without mutating the source world.
   g.world = { ...g.world, houses: g.world.houses.map(h => ({ ...h, memberIds: characters.filter(c => c.houseId === h.id && !c.id.startsWith('candidate')).map(c => c.id) })) }
   return g

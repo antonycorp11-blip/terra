@@ -12,11 +12,13 @@ O jogador achou o jogo sem graça: "só um mapa e algumas coisas". Diagnóstico:
 - **Lordes que andam** com escoltas (caçam bandos, visitam o suserano, vão à guerra) e **bandos de salteadores** que saqueiam, fogem e crescem; casas pagam recompensa.
 - **Cerco com a comitiva**: Irian cerca castelos onde está; os sobreviventes voltam para ele.
 - **Combate em campo** com tática, **captura de lordes** e decisão sobre o prisioneiro (juramento, resgate, libertar, manter).
+- **Visual de atlas iluminado**: fronteiras suaves, terra desconhecida em pergaminho, cores em aquarela, interface de pergaminho e tinta com selo de cera para encerrar o turno, cenas em tons de salão, novas telas de título e de criação da casa.
+- **Primeiro turno com alvo**: um bando pequeno ao lado de Pontevela e uma casa pagando para destruí-lo.
 - **Batalha animada nova** (fileiras, estandartes, relevo do terreno, carga, choque, poeira e baixas caindo), **cena de combate** com as duas forças, **cena de abertura**, **cena de conquista** ao virar grão-lorde, **Diário** de objetivos, **relatório do turno** e ganhos e perdas flutuando na barra de recursos.
 
 ### Validação em 06/10/2026
 
-- `npm test`: 57 testes (inclui `party.test.ts`).
+- `npm test`: 58 testes (inclui `party.test.ts`).
 - `npm run test:ui`: 10 fluxos Playwright.
 - `npm run build`: sem erros.
 

@@ -13,7 +13,8 @@ import { migrateGame } from './persistence'
 import type { GameState, Id } from './types'
 
 const base = createGame()
-const fresh = (): GameState => structuredClone(base)
+/** A clean start: without the opening band, so moves land on empty roads. */
+const fresh = (): GameState => { const g = structuredClone(base); g.campaign.parties = g.campaign.parties.filter(p => p.id !== 'band-0'); g.campaign.quests = []; return g }
 const player = (g: GameState) => g.world.houses.find(h => h.id === g.playerHouseId)!
 const house = (g: GameState, name: string) => g.world.houses.find(h => h.name === name)!
 const roundTrip = (g: GameState): GameState => migrateGame(JSON.parse(JSON.stringify(g)))
@@ -30,6 +31,12 @@ describe('turnos e comitiva', () => {
     expect(g.campaign.turn).toBe(1); expect(g.campaign.orders).toBe(BALANCE.turn.orders)
     expect(g.campaign.parties.filter(p => p.kind === 'lorde').length).toBeGreaterThan(5)
     expect(roundTrip(g)).toEqual(g)
+  })
+  it('o primeiro turno já tem um bando perto de casa e uma casa pedindo ajuda', () => {
+    const g = structuredClone(base), band0 = g.campaign.parties.find(p => p.id === 'band-0')!
+    expect(g.world.provinces.find(p => p.id === player(g).seatProvinceId)!.neighbors).toContain(band0.provinceId)
+    expect(g.campaign.quests[0].partyId).toBe('band-0')
+    expect(partyReach(g).has(band0.provinceId)).toBe(true)
   })
   it('a comitiva anda até 2 movimentos por turno e descobre a terra por onde passa', () => {
     let g = fresh()

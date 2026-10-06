@@ -184,6 +184,9 @@ test('a comitiva de Irian anda pelo mapa, e encerrar o turno mostra o que aconte
   expect(before).toBeGreaterThan(3)
   await markers.first().click()
   await expect(page.getByRole('button', { name: 'Comitiva de Irian' })).toContainText(/[01] mov/)
+  // The opening band waits next to Pontevela: if the retinue lands on it, fall back.
+  const fight = page.getByRole('dialog', { name: /Combate em/ })
+  if (await fight.isVisible()) await fight.getByRole('button', { name: /Recuar/ }).click()
   await endTurn(page).click()
   await expect(page.getByLabel('Turno', { exact: true })).toContainText('Turno 2')
   await expect(page.getByRole('button', { name: 'Comitiva de Irian' })).toContainText('2 mov')

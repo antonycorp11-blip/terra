@@ -8,6 +8,8 @@ import HouseCreation from './HouseCreation'
 import GameScreen, { type Notice } from './game/GameScreen'
 import { useUI } from './store'
 import { longDate, type Act } from './parts'
+import { AUTHORED_PORTRAITS, PORTRAITS } from '../engine/portraits'
+import { cardUrl } from './view'
 import styles from './App.module.css'
 
 type Screen = 'title' | 'creation' | 'game'
@@ -70,6 +72,7 @@ export default function App() {
   return <div className={styles.app}>
     {screen === 'creation' && base ? <HouseCreation base={base} onFound={found} onCancel={() => { setScreen(gameRef.current ? 'game' : 'title'); setBase(null) }}/>
       : <div className={styles.title}>
+        <img className={styles.hero} src={cardUrl(PORTRAITS[AUTHORED_PORTRAITS.irian].file)} alt="Irian"/>
         <div className={styles.titleCard}>
           <span className={styles.eyebrow}>TERRA</span>
           <h1>Herdeiros do Juramento</h1>
@@ -81,7 +84,7 @@ export default function App() {
       </div>}
     {saves && <div className={styles.modalBackdrop} onMouseDown={e => { if (e.target === e.currentTarget) setSaves(null) }}><div className={styles.modal} role="dialog" aria-label="Carregar campanha">
       <button className={styles.modalClose} onClick={() => setSaves(null)} aria-label="Fechar janela">×</button>
-      <span className={styles.eyebrow}>CAMPANHAS DE VAREDOR</span><h1>Carregar campanha</h1>
+      <span className={styles.eyebrow}>campanhas de varedor</span><h1>Carregar campanha</h1>
       <div className={styles.saveList}>{saves.length ? saves.map(s => <div key={s.slot}><button onClick={() => doLoad(s.slot)}><strong>{s.slot === 'autosave' ? 'Salvamento automático' : s.slot}</strong><small>{s.game.world.houses.find(h => h.id === s.game.playerHouseId)?.name} · {longDate(s.game.day)}</small></button><button onClick={async () => { await deleteSave(s.slot); setSaves(await listSaves()) }} aria-label={`Excluir ${s.slot}`}>×</button></div>) : <p>Não há campanhas salvas neste navegador.</p>}</div>
     </div></div>}
     {notice && <button className={styles.toast} onClick={() => setNotice(null)} aria-live="polite">{notice.title}{notice.text ? `: ${notice.text}` : ''}</button>}

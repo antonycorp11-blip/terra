@@ -19,6 +19,13 @@ Este documento descreve **apenas o que está implementado e jogável agora**. A 
 - **Sons** sintetizados (corneta ao encerrar o turno, tambores e choque na batalha, fanfarra na vitória, moedas ao ganhar ouro), com chave no menu.
 - **Abertura e marcos**: uma cena de abertura conta quem é Irian e como jogar; virar grão-lorde abre a cena de conquista.
 
+## Visual: atlas iluminado
+
+- O mapa é uma página de atlas: a terra desconhecida é pergaminho com hachura de gravador; a avistada, um véu de papel; a conhecida mostra o relevo com as cores das casas em aquarela (lavagem leve e faixa mais forte junto à fronteira). As fronteiras seguem curvas suaves (os dentes da malha foram alisados).
+- A interface usa o mesmo pergaminho e tinta; o vermelho de cera marca o que importa (ordens restantes, o selo de Encerrar turno). As cenas (audiências, decisões, batalhas) são um salão escuro à luz de velas.
+- Tela de título com Irian de corpo inteiro e o livro da campanha; criação da casa no mesmo estilo.
+- O primeiro turno já tem um bando pequeno numa terra vizinha e uma casa pedindo ajuda.
+
 ## A tela
 
 - Uma única tela: o mapa de Varedor em tela cheia, com zoom (roda, pinça, botões) e arraste. A câmera só se move por comando do jogador ou ao tocar numa notificação.

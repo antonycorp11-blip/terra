@@ -18,7 +18,7 @@ A bateria valida a geografia realista, o ciclo jogável do MVP (`docs/MVP_SCOPE.
 
 `src/engine/depth.test.ts` (Vitest): acontecimentos a cada poucos dias com consequência (8+ em 120 dias); guerra de Ardesh contra Hadrin no dia 40 e sucessão do grão-lorde; crescimento mensal da população com fatores; imposto alto rende mais e custa lealdade; governador; obras em níveis com custo crescente e quartel aumentando o recrutamento; desgaste do cerco e socorro do suserano; migração da revisão 2.
 
-`src/engine/party.test.ts` (Vitest): comitiva inicial e escoltas do reino; alcance de 2 movimentos e revelação; viagem em vários turnos; `endTurn` (7 dias, ordens, movimentos, bloqueio com decisão aberta); ordens esgotadas; troca de homens com a guarnição; conversa só em pessoa; combate com bando, saque e recompensa; derrota e volta para casa; saque de terra mal guardada; captura de lorde e juramento do prisioneiro; cerco com a comitiva, levantar o cerco e volta dos sobreviventes; movimento determinístico de lordes e bandos.
+`src/engine/party.test.ts` (Vitest): comitiva inicial e escoltas do reino; bando e pedido de ajuda no primeiro turno; alcance de 2 movimentos e revelação; viagem em vários turnos; `endTurn` (7 dias, ordens, movimentos, bloqueio com decisão aberta); ordens esgotadas; troca de homens com a guarnição; conversa só em pessoa; combate com bando, saque e recompensa; derrota e volta para casa; saque de terra mal guardada; captura de lorde e juramento do prisioneiro; cerco com a comitiva, levantar o cerco e volta dos sobreviventes; movimento determinístico de lordes e bandos.
 
 `tests/e2e/map.spec.ts` (Playwright):
 

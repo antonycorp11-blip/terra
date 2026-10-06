@@ -1,34 +1,34 @@
-.backdrop{position:absolute;inset:0;z-index:30;display:grid;place-items:center;padding:16px;background:radial-gradient(circle at 50% 35%,#1d4555 0,#0a2230 55%,#05131b 100%);overflow:auto}
-.card{width:min(860px,100%);max-height:100%;display:flex;flex-direction:column;background:#ead5ab;color:#30281c;border:2px solid #bf914d;box-shadow:inset 0 0 0 5px #f6e6c4,inset 0 0 0 6px #a77943,0 24px 70px #000c;animation:rise .35s ease-out}
+.backdrop{position:absolute;inset:0;z-index:30;display:grid;place-items:center;padding:16px;background:radial-gradient(ellipse at 30% 60%,rgba(214,150,60,.25),transparent 55%),linear-gradient(160deg,#1d150c,#0c0906);overflow:auto}
+.card{width:min(860px,100%);max-height:100%;display:flex;flex-direction:column;background:linear-gradient(180deg,#f4ead1,#e2d2ab);color:#2a2012;border-radius:12px;box-shadow:0 0 0 1px #8a6a2a,0 0 0 5px #f4ead1,0 0 0 6px #8a6a2a,0 24px 70px rgba(0,0,0,.75);animation:rise .35s ease-out}
 @keyframes rise{from{opacity:0;transform:translateY(14px)}}
-.header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:6px 6px 0;padding:10px 16px;background:#102333;color:#dbbd83}
-.eyebrow{font:700 10px Inter,sans-serif;letter-spacing:.16em}
-.steps{display:flex;gap:14px;list-style:none;margin:0;padding:0;font:600 11px Cinzel,Georgia,serif;color:#8ca0a6}
-.steps li{display:flex;align-items:center;gap:6px}.steps span{display:grid;place-items:center;width:20px;height:20px;border:1px solid currentColor;border-radius:50%;font:700 10px Inter,sans-serif}
-.steps .current{color:#ffe1a4}.steps .current span{background:#c79a52;color:#102333;border-color:#c79a52}.steps .done{color:#c8b48b}
+.header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:6px 6px 0;padding:10px 16px;background:#2a2318;color:#e8cf95;border-radius:8px}
+.eyebrow{font:700 11px 'Alegreya Sans SC',sans-serif;letter-spacing:.16em}
+.steps{display:flex;gap:14px;list-style:none;margin:0;padding:0;font:600 11px 'Alegreya Sans SC',sans-serif;color:#a8936a}
+.steps li{display:flex;align-items:center;gap:6px}.steps span{display:grid;place-items:center;width:20px;height:20px;border:1px solid currentColor;border-radius:50%;font:700 10px 'Alegreya Sans SC',sans-serif}
+.steps .current{color:#ffe1a4}.steps .current span{background:#8e1f17;color:#fff1d6;border-color:#e8c066}.steps .done{color:#c8b48b}
 .body{display:grid;grid-template-columns:230px 1fr;gap:22px;padding:20px 24px;overflow:auto;min-height:0}
-.preview{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:18px 10px;background:linear-gradient(#1b3848,#0d2532);border:1px solid #a87e45;color:#fbe7c1;text-align:center}
-.preview strong{font:600 19px Cinzel,Georgia,serif}.preview small{font:12px Georgia,serif;color:#c9bca0}
+.preview{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:18px 10px;background:radial-gradient(ellipse at 50% 30%,#3a2e1c,#1d150c);border:1px solid #8a6a2a;border-radius:10px;color:#fbe7c1;text-align:center}
+.preview strong{font:400 21px 'IM Fell English SC','Alegreya',Georgia,serif}.preview small{font:12px 'Alegreya',Georgia,serif;color:#c9bca0}
 .preview :global(.heraldry){transition:width .25s,height .25s;filter:drop-shadow(0 6px 10px #0009)}
-.form h1{font:600 24px Cinzel,Georgia,serif;margin:0 0 8px}.form h2{font:600 12px Cinzel,Georgia,serif;color:#5e4429;margin:14px 0 7px;border-bottom:1px solid #c2a273;padding-bottom:5px}
-.form p{font:14px/1.5 Georgia,serif;margin:6px 0}
-.field{display:block;font:600 11px Inter,sans-serif;letter-spacing:.06em;color:#6b5434;margin-top:14px}
-.prefixed{display:flex;margin-top:7px;border:2px solid #a97f44;background:#fbf0d8}.prefixed span{padding:11px 12px;background:#d9bc8a;font:600 16px Cinzel,Georgia,serif;color:#3a2c1b}
-.prefixed input{flex:1;min-width:0;border:0;background:transparent;padding:10px 12px;font:600 18px Cinzel,Georgia,serif;color:#2b2217;outline:none}
-.hint{color:#6b5a40!important;font-size:13px!important}.error{color:#9b2c25!important;font:600 13px Inter,sans-serif!important}
+.form h1{font:400 26px 'IM Fell English SC','Alegreya',Georgia,serif;margin:0 0 8px}.form h2{font:700 12px 'Alegreya Sans SC',sans-serif;letter-spacing:.1em;color:#5e4429;margin:14px 0 7px;border-bottom:1px solid #c2a273;padding-bottom:5px}
+.form p{font:14.5px/1.5 'Alegreya','Alegreya',Georgia,serif;margin:6px 0}
+.field{display:block;font:600 11px 'Alegreya Sans SC',sans-serif;letter-spacing:.06em;color:#6b5434;margin-top:14px}
+.prefixed{display:flex;margin-top:7px;border:1px solid #8a6a2a;border-radius:8px;overflow:hidden;background:#fbf4e2}.prefixed span{padding:11px 12px;background:#e4d6b3;font:400 18px 'IM Fell English SC','Alegreya',Georgia,serif;color:#3a2c1b}
+.prefixed input{flex:1;min-width:0;border:0;background:transparent;padding:10px 12px;font:400 20px 'IM Fell English SC','Alegreya',Georgia,serif;color:#2b2217;outline:none}
+.hint{color:#6b5a40!important;font-size:13px!important}.error{color:#9b2c25!important;font:600 13px 'Alegreya Sans SC',sans-serif!important}
 .grid8{display:grid;grid-template-columns:repeat(8,1fr);gap:5px}
-.grid8 button,.symbols button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;background:#f5e7c8;border:1px solid #c3a272;color:#3a2e20;transition:background .15s,transform .15s}
-.grid8 button:hover,.symbols button:hover{background:#fff4dc;transform:translateY(-1px)}.grid8 small{font:9px Inter,sans-serif}
+.grid8 button,.symbols button{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 2px;background:#f7eedb;border:1px solid #c3a272;border-radius:7px;color:#3a2e20;transition:background .15s,transform .15s}
+.grid8 button:hover,.symbols button:hover{background:#fff4dc;transform:translateY(-1px)}.grid8 small{font:9px 'Alegreya Sans SC',sans-serif}
 .symbols{display:grid;grid-template-columns:repeat(8,1fr);gap:5px}
-.picked{background:#2b4b62!important;color:#ffe6b5!important;border-color:#e2b866!important;box-shadow:0 0 0 2px #e2b86655}
+.picked{background:#2a2318!important;color:#f1d9a0!important;border-color:#e8c066!important;box-shadow:0 0 0 2px rgba(142,31,23,.35)}
 .colorRows{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .colors{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}.colors button{aspect-ratio:1;border:2px solid #6d532f;border-radius:50%;min-width:0;transition:transform .15s}.colors button:hover{transform:scale(1.1)}
-.pickedColor{outline:3px solid #1b3a4c;outline-offset:2px;transform:scale(1.08)}
+.pickedColor{outline:3px solid #8e1f17;outline-offset:2px;transform:scale(1.08)}
 .summary,.resources{display:grid;grid-template-columns:1fr 1fr;gap:6px 18px;margin:12px 0 0}.resources{grid-template-columns:repeat(5,1fr)}
-.summary div,.resources div{border-bottom:1px solid #c7ab7f;padding:6px 0}.summary dt,.resources dt{font:600 10px Inter,sans-serif;letter-spacing:.08em;color:#8a6a3d;text-transform:uppercase}.summary dd,.resources dd{margin:3px 0 0;font:600 15px Cinzel,Georgia,serif}
+.summary div,.resources div{border-bottom:1px solid #c7ab7f;padding:6px 0}.summary dt,.resources dt{font:600 10px 'Alegreya Sans SC',sans-serif;letter-spacing:.08em;color:#8a6a3d;text-transform:uppercase}.summary dd,.resources dd{margin:3px 0 0;font:400 17px 'IM Fell English SC','Alegreya',Georgia,serif}
 .footer{display:flex;justify-content:space-between;gap:12px;padding:12px 24px 18px;border-top:1px solid #c2a273}
-.primary,.secondary{min-height:42px;padding:9px 22px;font:600 13px Cinzel,Georgia,serif;border:2px solid #bd9052}
-.primary{background:linear-gradient(#2b4b62,#112b3d);color:#f9e4bd}.primary:hover:not(:disabled){background:#39657a}.primary:disabled{opacity:.45}
-.secondary{background:#f3e3c2;color:#4a3820}.secondary:hover{background:#fff1d6}
+.primary,.secondary{min-height:42px;padding:9px 22px;font:700 14px 'Alegreya Sans SC',sans-serif;letter-spacing:.06em;border-radius:10px;cursor:pointer}
+.primary{background:radial-gradient(circle at 35% 25%,#d8574a,#8e1f17 60%,#560f0b);color:#fff1d6;border:2px solid #e8c066}.primary:hover:not(:disabled){filter:brightness(1.08)}.primary:disabled{opacity:.45}
+.secondary{background:#f7eedb;color:#4a3820;border:1px solid #8a6a2a}.secondary:hover{background:#fff6e4}
 @media(max-width:760px),(max-height:520px){.body{grid-template-columns:150px 1fr;gap:14px;padding:12px 14px}.preview{padding:10px 6px}.preview :global(.heraldry){width:96px!important;height:106px!important}.form h1{font-size:19px}.grid8,.symbols{grid-template-columns:repeat(8,1fr)}.grid8 small{display:none}.colorRows{grid-template-columns:1fr 1fr}.colors{grid-template-columns:repeat(6,1fr)}.resources{grid-template-columns:repeat(3,1fr)}.footer{padding:8px 14px 10px}.header{padding:7px 12px}.steps{gap:8px;font-size:10px}}
 @media(max-width:520px){.body{grid-template-columns:1fr}.preview{flex-direction:row}.colorRows{grid-template-columns:1fr}}
